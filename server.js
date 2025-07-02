@@ -23,18 +23,38 @@ app.use(express.json());
 
 
 
-const corsOptions = {
-  origin: [
-    'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://192.168.1.221:3000'
-  ],
-  credentials: true,
-  optionsSuccessStatus: 200, // ✅ important pour corriger l'erreur 204 sur Heroku
-};
+// 📌 1️⃣ Configuration des origines autorisées
+const allowedOrigins = [
+  'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://192.168.1.221:3000'
+];
 
-app.use(cors(corsOptions));
+// 📌 2️⃣ Middleware CORS (via le module)
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+// 📌 3️⃣ Middleware manuel pour garantir les en-têtes CORS
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
 
 
 

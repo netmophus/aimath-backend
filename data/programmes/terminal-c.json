@@ -1,0 +1,218 @@
+{
+  "Thèmes": [
+    {
+      "nom": "Similitudes et Affinités",
+      "chapitres": [
+        {
+          "titre": "Similitudes planes directes et indirectes",
+          "contenus": [
+            "Définition. Caractérisation. Propriétés",
+            "Application complexe associée",
+            "Éléments caractéristiques",
+            "Expression analytique",
+            "Images de figures simples",
+            "Utilisation de propriétés des similitudes"
+          ],
+          "objectifs": [
+            "Définir une similitude",
+            "Déterminer l’application complexe associée",
+            "Déterminer les éléments caractéristiques",
+            "Déterminer l’expression analytique",
+            "Construire les images de figures simples",
+            "Utiliser la propriété des distances dans une similitude"
+          ]
+        },
+        {
+          "titre": "Projections, Affinités",
+          "contenus": [
+            "Définitions. Propriétés"
+          ],
+          "objectifs": [
+            "Définir les applications affines",
+            "Utiliser leurs propriétés pour résoudre des problèmes"
+          ]
+        }
+      ]
+    },
+    {
+      "nom": "Coniques",
+      "chapitres": [
+        {
+          "titre": "Coniques",
+          "contenus": [
+            "Définitions géométriques (foyer, directrice)",
+            "Équations cartésiennes et paramétriques",
+            "Tangente en un point",
+            "Equation d’hyperbole"
+          ],
+          "objectifs": [
+            "Définir et reconnaître une conique",
+            "Déterminer une équation cartésienne/paramétrique",
+            "Tracer la tangente",
+            "Représenter graphiquement une conique"
+          ]
+        }
+      ]
+    },
+    {
+      "nom": "Géométrie dans l'espace",
+      "chapitres": [
+        {
+          "titre": "Applications affines de l’espace",
+          "contenus": [
+            "Translations, homothéties, symétries, rotations, vissages",
+            "Isométries de l’espace"
+          ],
+          "objectifs": [
+            "Définir les applications",
+            "Reconnaître les isométries",
+            "Construire les transformés",
+            "Utiliser les propriétés pour démontrer",
+            "Classer les isométries"
+          ]
+        }
+      ]
+    },
+    {
+      "nom": "Organisation des données",
+      "chapitres": [
+        {
+          "titre": "Suites numériques",
+          "contenus": [
+            "Raisonnement par récurrence",
+            "Convergence et divergence",
+            "Théorèmes de comparaison"
+          ],
+          "objectifs": [
+            "Utiliser la récurrence",
+            "Démontrer la convergence",
+            "Utiliser les théorèmes de comparaison"
+          ]
+        },
+        {
+          "titre": "Fonctions logarithmes",
+          "contenus": [
+            "Logarithme népérien",
+            "Logarithme de base a"
+          ],
+          "objectifs": [
+            "Définir les fonctions logarithmiques",
+            "Utiliser leurs propriétés et dérivées",
+            "Utiliser des limites",
+            "Représenter graphiquement"
+          ]
+        },
+        {
+          "titre": "Fonctions continues ou dérivables",
+          "contenus": [
+            "Théorème des valeurs intermédiaires",
+            "Fonction réciproque",
+            "Dérivées composées et réciproques"
+          ],
+          "objectifs": [
+            "Utiliser le TVI",
+            "Montrer qu’une fonction est bijective",
+            "Utiliser la dérivée de fonctions composées"
+          ]
+        },
+        {
+          "titre": "Fonctions exponentielles",
+          "contenus": [
+            "Exponentielle de base e",
+            "Exponentielle de base a"
+          ],
+          "objectifs": [
+            "Définir les exponentielles",
+            "Utiliser les propriétés, dérivées et limites",
+            "Représenter graphiquement"
+          ]
+        },
+        {
+          "titre": "Études de fonctions",
+          "contenus": [
+            "Représentation graphique",
+            "Équations, inéquations",
+            "Points d’inflexion"
+          ],
+          "objectifs": [
+            "Utiliser les graphes pour résoudre",
+            "Déterminer les asymptotes",
+            "Étudier les fonctions diverses"
+          ]
+        },
+        {
+          "titre": "Encadrements et approximations",
+          "contenus": [
+            "Inégalités des accroissements finis",
+            "Encadrement et approximation de zéros"
+          ],
+          "objectifs": [
+            "Encadrer une fonction",
+            "Déterminer une valeur approchée"
+          ]
+        },
+        {
+          "titre": "Calcul intégral",
+          "contenus": [
+            "Définition, propriétés",
+            "Techniques de calcul (primitives, changement de variable, parties)",
+            "Applications (aires, volumes, encadrements)"
+          ],
+          "objectifs": [
+            "Définir et utiliser l’intégrale",
+            "Utiliser les techniques",
+            "Étudier des fonctions intégrales",
+            "Calculer aires et volumes"
+          ]
+        },
+        {
+          "titre": "Équations différentielles",
+          "contenus": [
+            "Équations du 1er et 2e ordre à coefficients constants"
+          ],
+          "objectifs": [
+            "Définir et résoudre ces équations différentielles"
+          ]
+        },
+        {
+          "titre": "Probabilités",
+          "contenus": [
+            "Notions, vocabulaire, dénombrement",
+            "Probabilité conditionnelle",
+            "Événements indépendants"
+          ],
+          "objectifs": [
+            "Définir et calculer des probabilités",
+            "Utiliser les formules de condition et de probabilité totale"
+          ]
+        },
+        {
+          "titre": "Variables aléatoires",
+          "contenus": [
+            "Définitions, lois, espérance, variance, écart-type",
+            "Fonction de répartition",
+            "Loi binomiale"
+          ],
+          "objectifs": [
+            "Définir les variables aléatoires",
+            "Déterminer lois, espérance, fonction de répartition",
+            "Utiliser la loi binomiale"
+          ]
+        },
+        {
+          "titre": "Séries statistiques à deux variables",
+          "contenus": [
+            "Nuage de points",
+            "Droites de régression",
+            "Coefficient de corrélation"
+          ],
+          "objectifs": [
+            "Représenter un nuage",
+            "Déterminer les droites et le coefficient",
+            "Interpréter les corrélations"
+          ]
+        }
+      ]
+    }
+  ]
+}

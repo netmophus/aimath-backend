@@ -20,10 +20,6 @@ app.use(express.json());
 
 // 🔒 CORS
 
-
-
-
-// 📌 1️⃣ Configuration des origines autorisées
 const allowedOrigins = [
   'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
   'http://localhost:3000',
@@ -31,25 +27,33 @@ const allowedOrigins = [
   'http://192.168.1.221:3000'
 ];
 
-// 📌 2️⃣ Middleware CORS (via le module)
+// ✅ Middleware CORS dynamique et complet
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Autoriser les outils comme Postman ou appels sans origin
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  optionsSuccessStatus: 200 // ✅ pour corriger les réponses 204 sur Heroku
 }));
 
-// 📌 3️⃣ Middleware manuel pour garantir les en-têtes CORS
+// ✅ Middleware manuel pour garantir les en-têtes
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
+    res.setHeader("Access-Control-Allow-Origin", origin);
   }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
 

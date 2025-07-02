@@ -21,20 +21,26 @@ app.use(express.json());
 // 🔒 CORS
 
 
+
+
 const corsOptions = {
   origin: [
     'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-    'http://192.168.1.221:3000'    
+    'http://192.168.1.221:3000'
   ],
   credentials: true,
+  optionsSuccessStatus: 200, // ✅ important pour corriger l'erreur 204 sur Heroku
 };
 
 app.use(cors(corsOptions));
 
 
-app.use(cors(corsOptions));
+
+
+
+
 
 
 

@@ -1,62 +1,54 @@
-// const Book = require("../models/bookModel");
-// const cloudinary = require("../config/cloudinary");
+
+const { getOrCreateMonthlyUsage } = require("../utils/getOrCreateMonthlyUsage");
+const Book = require("../models/bookModel");
+
 
 // const createBook = async (req, res) => {
 //   try {
+//     console.log("📥 Body :", req.body);
+//     console.log("📁 Fichiers :", req.files);
+
 //     const { title, author, description, level, badge } = req.body;
 
-//     if (!req.files || !req.files.cover || !req.files.pdf) {
-//       return res.status(400).json({ message: "Image de couverture et PDF requis." });
+//     const coverImage = req.files?.cover?.[0]?.path;
+//     const fileUrl = req.files?.pdf?.[0]?.path;
+
+//     if (!coverImage || !fileUrl) {
+//       return res.status(400).json({ message: "📂 Couverture et PDF requis." });
 //     }
 
-//     // 📤 Upload image de couverture
-//     const coverUpload = await cloudinary.uploader.upload_stream_async(req.files.cover[0], "fahimta_books/covers");
-
-//     // 📤 Upload du PDF
-//     const pdfUpload = await cloudinary.uploader.upload_stream_async(req.files.pdf[0], "fahimta_books/pdfs", "raw");
-
-//     const newBook = new Book({
+//     const book = await Book.create({
 //       title,
 //       author,
 //       description,
 //       level,
 //       badge,
-//       coverImage: coverUpload.secure_url,
-//       fileUrl: pdfUpload.secure_url,
+//       coverImage,
+//       fileUrl,
 //     });
 
-//     await newBook.save();
-//     res.status(201).json({ message: "Livre ajouté avec succès", book: newBook });
+//     console.log("✅ Livre enregistré avec succès :", book._id);
+//     res.status(201).json(book);
 //   } catch (err) {
-//     console.error("Erreur création livre :", err);
-//     res.status(500).json({ message: "Erreur lors de l'ajout du livre." });
+//     console.error("❌ Erreur :", err.message);
+//     res.status(500).json({ message: "❌ Erreur lors de la création du livre." });
 //   }
 // };
 
-// module.exports = {
-//   createBook,
-//   // Tu peux aussi ajouter updateBook, deleteBook, getAllBooks ici
-// };
 
-
-
-
-
-const Book = require("../models/bookModel");
+// ✅ Modifier un livre
 
 
 const createBook = async (req, res) => {
   try {
-    console.log("📥 Body :", req.body);
-    console.log("📁 Fichiers :", req.files);
+    const { title, author, description, level, badge, fileUrl } = req.body;
 
-    const { title, author, description, level, badge } = req.body;
 
     const coverImage = req.files?.cover?.[0]?.path;
-    const fileUrl = req.files?.pdf?.[0]?.path;
 
+    // 🧾 Vérification
     if (!coverImage || !fileUrl) {
-      return res.status(400).json({ message: "📂 Couverture et PDF requis." });
+      return res.status(400).json({ message: "La couverture et le lien du PDF sont requis." });
     }
 
     const book = await Book.create({
@@ -66,19 +58,20 @@ const createBook = async (req, res) => {
       level,
       badge,
       coverImage,
-      fileUrl,
+      fileUrl, // ✅ tu prends directement le lien depuis le body
     });
 
-    console.log("✅ Livre enregistré avec succès :", book._id);
     res.status(201).json(book);
   } catch (err) {
-    console.error("❌ Erreur :", err.message);
-    res.status(500).json({ message: "❌ Erreur lors de la création du livre." });
+    console.error("Erreur création livre :", err.message);
+    res.status(500).json({ message: "Erreur lors de la création du livre." });
   }
 };
 
 
-// ✅ Modifier un livre
+
+
+
 const updateBook = async (req, res) => {
   try {
     const book = await Book.findById(req.params.id);
@@ -146,10 +139,17 @@ const getBookById = async (req, res) => {
   }
 };
 
+
+
+
+
 module.exports = {
   createBook,
   updateBook,
   deleteBook,
   getAllBooks,
   getBookById,
+  //  downloadBookWithLimit,
+  //  viewBook,
+   
 };

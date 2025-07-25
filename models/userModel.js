@@ -1,91 +1,36 @@
 
-
-
-// const mongoose = require("mongoose");
-// const bcrypt = require("bcryptjs");
-
-// const userSchema = new mongoose.Schema({
-//   phone: {
-//     type: String,
-//     required: true,
-//     unique: true,
-//   },
-//   password: {
-//     type: String,
-//     required: true,
-//   },
-//   otp: {
-//     type: String,
-//   },
-//   isVerified: {
-//     type: Boolean,
-//     default: false,
-//   },
-//   isActive: {                  // ✅ AJOUTÉ
-//     type: Boolean,
-//     default: false,
-//   },
-//   role: {
-//     type: String,
-//     enum: ["eleve", "admin"],
-//     default: "eleve",
-//   },
-//   classLevel: {
-//     type: String,
-//     enum: [
-//       "6eme",
-//       "5eme",
-//       "4eme",
-//       "3eme",
-//       "seconde-a",
-//       "seconde-c",
-//       "premiere-a",
-//       "premiere-c",
-//       "premiere-d",
-//       "terminale-a",
-//       "terminale-c",
-//       "terminale-d",
-//     ],
-//     required: function () {
-//       return this.role === "eleve";
-//     },
-//   },
-// }, {
-//   timestamps: true,
-// });
-
-// // 🔐 Hash du mot de passe
-// userSchema.pre("save", async function (next) {
-//   if (!this.isModified("password")) return next();
-//   const salt = await bcrypt.genSalt(10);
-//   this.password = await bcrypt.hash(this.password, salt);
-//   next();
-// });
-
-// // 🔐 Vérification du mot de passe
-// userSchema.methods.matchPassword = async function (enteredPassword) {
-//   return await bcrypt.compare(enteredPassword, this.password);
-// };
-
-// const User = mongoose.model("User", userSchema);
-// module.exports = User;
-
-
-
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema(
   {
+    
     phone: {
-      type: String,
-      required: true,
-      unique: true,
-    },
-    password: {
-      type: String,
-      required: true,
-    },
+  type: String,
+  unique: true,
+  sparse: true, // accepte plusieurs `null`
+},
+
+password: {
+  type: String,
+},
+
+
+    email: {
+  type: String,
+  unique: true,
+  sparse: true,
+},
+provider: {
+  type: String,
+  enum: ['local', 'google', 'facebook'],
+  default: 'local',
+},
+providerId: {
+  type: String,
+},
+
+
     fullName: {
       type: String,
       required: true,
@@ -101,7 +46,7 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["eleve", "admin"],
+      enum: ["eleve", "admin", "teacher"],
       default: "eleve",
     },
 
@@ -113,6 +58,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    profileCompleted: {
+  type: Boolean,
+  default: false,
+},
+
+photo: {
+  type: String, // URL vers l'image (hébergée sur Cloudinary ou autre)
+  default: "",  // ou une image par défaut
+},
+
+
     otp: String,
 
     isSubscribed: {
@@ -138,11 +95,20 @@ paymentReference: { type: String },
 
 // 🔐 Hash du mot de passe
 userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+  if (
+    !this.isModified("password") ||
+    !this.password || 
+    this.provider === 'google' || 
+    this.provider === 'facebook'
+  ) {
+    return next();
+  }
+
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
+
 
 // 🔐 Vérification du mot de passe
 userSchema.methods.matchPassword = async function (enteredPassword) {

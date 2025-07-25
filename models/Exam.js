@@ -24,13 +24,23 @@ const examSchema = new mongoose.Schema(
       type: String,
       required: true, // URL du fichier sujet
     },
-     correctionUrl: {
-      type: String,
-      required: true, // URL de la correction
+   correctionUrl: {
+      type: String, // ✅ Plus requis
+      default: null,
     },
     coverImage: {
       type: String, // Optionnel, pour une miniature
     },
+
+    subjectDownloadCount: {
+  type: Number,
+  default: 0,
+},
+correctionDownloadCount: {
+  type: Number,
+  default: 0,
+},
+
   },
   { timestamps: true }
 );

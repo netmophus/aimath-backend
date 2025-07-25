@@ -1,25 +1,28 @@
 const express = require("express");
 const router = express.Router();
 const examController = require("../controllers/examController");
+const {downloadExamSubject, downloadExamCorrection  } = require("../controllers/examController");
+
 const authMiddleware = require("../middlewares/authMiddleware");
 const { authorizeRoles } = require("../middlewares/roleMiddleware");
 const uploadExam = require("../middlewares/uploadExam");
 
-const multerMiddleware = uploadExam.fields([
-  { name: "subject", maxCount: 1 },
-  { name: "correction", maxCount: 1 },
-  { name: "cover", maxCount: 1 }
-]);
+const multerMiddleware = uploadExam;
+
+
+
 
 router.post(
   "/",
   authMiddleware,
   authorizeRoles("admin"),
-  multerMiddleware,
+  uploadExam,  // ✅ middleware Cloudinary ici
   examController.createExam
 );
 
+
 router.get("/", examController.getAllExams);
+
 
 router.put(
   "/:id",

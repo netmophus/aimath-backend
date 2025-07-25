@@ -15,6 +15,19 @@ router.post(
   videoController.createVideo
 );
 
+
+
+
+router.get(
+  "/watch/:id",
+  authMiddleware,
+  authorizeRoles("eleve"),
+  videoController.watchVideo // ✅ version sans quota
+);
+
+
+
+
 router.put(
   "/:id",
   authMiddleware,
@@ -32,5 +45,9 @@ router.delete(
 
 router.get("/", videoController.getAllVideos);
 router.get("/:id", videoController.getVideoById);
+
+
+
+
 
 module.exports = router;

@@ -1,63 +1,66 @@
-// const express = require("express");
-// const router = express.Router();
-// const multer = require("multer");
-// const { uploadAndSolveImage,  solveExercise } = require("../controllers/imageToTextController");
-// const authMiddleware = require("../middlewares/authMiddleware");
-// const { authorizeRoles } = require("../middlewares/roleMiddleware");
-
-// const upload = multer({ dest: "uploads/" }); // dossier temporaire
-
-// router.post(
-//   "/upload",
-//   authMiddleware,
-//   authorizeRoles("eleve"),
-//   upload.single("image"),
-//   uploadAndSolveImage
-// );
-
-
-// // ✍️ Route pour saisie de question manuelle
-// router.post(
-//     "/solve",
-//     authMiddleware,
-//     authorizeRoles("eleve"),
-//     iaUsageLimiter,
-//     solveExercise
-//   );
-
-// module.exports = router;
-
-
 
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 
-const { uploadAndSolveImage } = require("../controllers/imageToTextController");
-const { callGemini } = require("../controllers/geminiController");
+const {
+  uploadAndSolveImage,
+  callMathpixOCR , 
+   callGptVisionSolve,
+} = require("../controllers/imageToTextController");
+
+const { callGemini ,  callGptTxtPrenuim} = require("../controllers/geminiController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const { authorizeRoles } = require("../middlewares/roleMiddleware");
-const iaUsageLimiter = require("../middlewares/iaUsageLimiter"); // ✅ À ajouter
 
 const upload = multer({ dest: "uploads/" });
 
-// Image route
+// 🔵 OCR Tesseract
 router.post(
   "/upload",
   authMiddleware,
   authorizeRoles("eleve"),
   upload.single("image"),
-  // iaUsageLimiter, // 👈 AJOUT ICI pour bloquer après 10 requêtes
   uploadAndSolveImage
 );
 
-// Texte manuel
+// 🔵 Gemini IA via texte manuel
 router.post(
   "/solve",
   authMiddleware,
   authorizeRoles("eleve"),
-  // iaUsageLimiter,
   callGemini
 );
+
+
+// 🔵 GPT 4.0 Premium via texte manuel (Fahimta)
+router.post(
+  "/gtptxtprenuim",
+  authMiddleware,
+  authorizeRoles("eleve"),
+  callGptTxtPrenuim
+);
+
+
+// 🔵 OCR Mathpix (nouvelle route)
+router.post(
+  "/mathpix",
+  authMiddleware,
+  authorizeRoles("eleve"),
+  upload.single("image"),
+  callMathpixOCR
+);
+
+
+
+// 🔵 GPT-Vision (analyse d'image avec OpenAI)
+router.post(
+  "/gpt",
+  authMiddleware,
+  authorizeRoles("eleve"),
+  upload.single("image"),
+  callGptVisionSolve
+);
+
 
 module.exports = router;

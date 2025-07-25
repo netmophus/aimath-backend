@@ -29,6 +29,16 @@ const bookSchema = new mongoose.Schema(
       enum: ["gratuit", "prenuim"],
       default: "gratuit",
     },
+
+    viewCount: {
+  type: Number,
+  default: 0,
+},
+downloadCount: {
+  type: Number,
+  default: 0,
+},
+
     fileUrl: {
       type: String,
       required: true, // URL du fichier PDF du livre

@@ -1,17 +1,28 @@
 const Exam = require("../models/Exam");
 
+
+
+
+
 exports.createExam = async (req, res) => {
   try {
     const { title, level, description, badge } = req.body;
 
-    const subjectUrl = req.files?.subject?.[0]?.path;
-    const correctionUrl = req.files?.correction?.[0]?.path;
-    const coverImage = req.files?.cover?.[0]?.path;
-
-    if (!subjectUrl || !correctionUrl) {
-      return res.status(400).json({ message: "Sujet et correction PDF requis." });
+    // ✅ Vérification des champs obligatoires
+    if (!title || !level || !description || !badge) {
+      return res.status(400).json({ message: "Tous les champs sont requis." });
     }
 
+    // ✅ Accès aux URLs Cloudinary
+    const subjectUrl = req.files?.subject?.[0]?.path;
+    const correctionUrl = req.files?.correction?.[0]?.path || null;
+    const coverImage = req.files?.cover?.[0]?.path || null;
+
+    if (!subjectUrl) {
+      return res.status(400).json({ message: "Le fichier du sujet est obligatoire." });
+    }
+
+    // ✅ Création de l'examen
     const newExam = new Exam({
       title,
       level,
@@ -23,11 +34,18 @@ exports.createExam = async (req, res) => {
     });
 
     await newExam.save();
-    res.status(201).json({ message: "Sujet d'examen ajouté avec succès." });
+
+    res.status(201).json({
+      message: "✅ Sujet d'examen ajouté avec succès.",
+      exam: newExam,
+    });
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur." });
+    console.error("Erreur création exam :", error.message);
+    res.status(500).json({ message: "❌ Erreur serveur lors de l'ajout de l'examen." });
   }
 };
+
+
 
 
 exports.getAllExams = async (req, res) => {

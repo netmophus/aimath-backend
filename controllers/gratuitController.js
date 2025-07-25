@@ -1,72 +1,184 @@
-// const axios = require("axios");
-
-// const GEMINI_API_URL =
-//   "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
-// const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-// // 📘 Contrôleur gratuit : donne une piste ou explication
-// const callGeminiGratuit = async (req, res) => {
-//   const { input } = req.body;
-
-//   if (!input) return res.status(400).json({ message: "Aucun texte fourni." });
-
-//   // const prompt = `Explique simplement ou donne une piste de réflexion pour cette question mathématique : ${input}.`;
-
-//   try {
-
-
-
-//     const prompt = `
-// Tu es un professeur de mathématiques s’adressant à des élèves .
-
-// Tu dois répondre avec des **formules standard lisibles**, comme celles que l’on trouve dans les **livres de mathématiques**. N'utilise **pas** de LaTeX, **pas de balises HTML**, **pas de code informatique**.
-
-// ✅ Exemples attendus :
-// - uₙ = 2n
-// - uₙ₊₁ = uₙ + 3
-// - ∫₀¹ x² dx = 1/3
-// - S = π × r²
-
-// ❌ Ne réponds **jamais** avec du LaTeX ($...$ ou $$...$$), ni avec du code ou des balises <sup> <sub>.
-
-// Ta réponse doit être claire, simple, avec des **phrases pédagogiques** et des **formules mathématiques classiques**.
-
-// Maintenant, explique ou donne une piste de réflexion pour cette question : ${input}
-// `;
-
-
-
-//     const response = await axios.post(
-//       `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`,
-//       {
-//         contents: [
-//           {
-//             role: "user",
-//             parts: [{ text: prompt }],
-//           },
-//         ],
-//       },
-//       { headers: { "Content-Type": "application/json" } }
-//     );
-
-//     const result = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-//     if (!result) return res.status(500).json({ message: "Réponse vide de Gemini." });
-
-//     res.json({ response: result });
-//   } catch (error) {
-//     console.error("❌ Erreur IA gratuite :", error.message);
-//     res.status(500).json({ message: "Erreur IA gratuite", detail: error.message });
-//   }
-// };
-
-// module.exports = { callGeminiGratuit };
-
-
-
-
 
 const axios = require("axios");
 const QuestionLimit = require("../models/QuestionLimit");
+const Book = require("../models/bookModel");
+const Exam = require("../models/Exam");
+const Video = require("../models/videoModel");
+const OpenAI = require("openai");
+
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const callGTPTextGratuit = async (req, res) => {
+  try {
+   
+
+    const { input } = req.body;
+    const userId = req.user._id;
+    const maxTests = 5;
+    const today = new Date();
+
+    // ⛔ Vérifications
+    if (!input || input.trim().length === 0) {
+      return res.status(400).json({ message: "Le message est vide." });
+    }
+
+    if (input.length > 300) {
+      return res.status(400).json({ message: "Votre question est trop longue. Veuillez la raccourcir." });
+    }
+
+    // 🔄 Récupérer les infos de limite
+    let limit = await QuestionLimit.findOne({ user: userId });
+    const isNewMonth = limit &&
+      (today.getMonth() !== new Date(limit.lastReset).getMonth() ||
+       today.getFullYear() !== new Date(limit.lastReset).getFullYear());
+
+       console.log("📊 État compteur avant requête :", {
+  count: limit?.count,
+  lastReset: limit?.lastReset,
+});
+
+
+    if (limit && !isNewMonth && limit.count >= maxTests) {
+      return res.status(403).json({
+        message: "❌ Vous avez atteint la limite de 5 questions gratuites ce mois-ci.",
+        remaining: 0,
+      });
+    }
+
+    // 🔮 Appel OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+         content: `
+Tu es un professeur de mathématiques expérimenté, et tu réponds comme dans un manuel scolaire imprimé (papier), destiné à des élèves du collège jusqu’à l’université.
+
+🎯 Ta mission est de résoudre des exercices ou d’expliquer des notions mathématiques de manière rigoureuse, claire et fluide, comme dans un vrai livre de mathématiques.
+
+Voici les règles STRICTES à suivre :
+
+1. Tu peux utiliser des formules en langage LaTeX, mais tu ne dois JAMAIS utiliser de balises Markdown (\`$\`, \`$$\`) ni d’éléments spécifiques à LaTeX comme \\mathbb, \\frac, \\lim, \\int, \\sum, etc. Tout doit être transformé en notation lisible et naturelle, comme dans un livre.
+
+2. Tous les symboles doivent apparaître dans leur version typographique lisible :
+  uₙ au lieu de u_n
+
+2³ = 8 au lieu de 2^3
+
+∫₀¹ x² dx = ⅓ au lieu de \int_0^1 x^2 dx
+
+limₓ→ₐ f(x) = L au lieu de \lim_{x \to a} f(x)
+
+f′(x) au lieu de f'(x) ou df/dx
+
+√2 au lieu de \sqrt{2}
+
+x⁴ + 3x² − 5 au lieu de x^4 + 3x^2 - 5
+
+∆y/∆x ou dy/dx → utiliser la forme typographique et non d/dx brut
+
+Σₖ₌₁ⁿ aₖ au lieu de \sum_{k=1}^n a_k
+
+∀x ∈ ℝ, ∃y ∈ ℕ… au lieu de \forall x \in \mathbb{R}, \exists y \in \mathbb{N}
+
+x → +∞ au lieu de x \to +\infty
+
+a ≠ b au lieu de a \ne b
+
+a ≤ b et a ≥ b au lieu de a \le b, a \ge b
+
+|x| au lieu de \lvert x \rvert
+
+⊂, ⊆, ∈, ∉, ∅, ℝ, ℕ, ℤ, ℚ, ℂ pour les ensembles usuels
+
+∘ pour la composition de fonctions (ex : f ∘ g)
+
+⟦1, n⟧ pour les intervalles entiers, ou [a, b], ]a, b[ pour les intervalles réels
+
+∂f/∂x pour les dérivées partielles (pas \partial f / \partial x)
+
+eˣ au lieu de exp(x) ou e^x (si le contexte le permet)
+
+Utilise toujours la notation eˣ au lieu de e^x ou exp(x) si le contexte le permet.
+
+Si une constante initiale est présente, écris-la naturellement : a × eˣ (et non a * e^x).
+
+Pour les exponentielles à base quelconque : aˣ au lieu de a^x.
+
+Pour les dérivées :
+
+d(eˣ)/dx = eˣ
+
+d(aˣ)/dx = aˣ × ln(a)
+
+Respecte également les notations naturelles pour les propriétés :
+
+eˣ⁺ʸ = eˣ × eʸ
+
+(aˣ)ʸ = aˣʸ
+
+aˣ / aʸ = aˣ⁻ʸ
+
+ explique clairement chaque formule et propriété, comme dans un cours ou un manuel imprimé.
+
+3. N’utilise JAMAIS de caractères pour faire du style (gras, italique, puces, tirets, deux-points après les titres, etc.).
+   - Ne commence jamais une ligne par “-”, “•”, “*”, ou autre.
+   - Ne fais pas de “**Suites arithmétiques :**”, ni de titres soulignés.
+   - Chaque paragraphe doit être complet, sans liste.
+
+4. Structure ta réponse comme un texte fluide et continu, comme un chapitre de livre : plusieurs phrases liées, bien expliquées, sans liste.
+
+5. Ne fais une démonstration par récurrence que si elle est explicitement demandée dans l’énoncé.
+
+6. Ne dis jamais “on note $\mathbb{N}$” ou “on écrit $\lim_{x \\to a}$”. Tu dois écrire directement : ℕ, uₙ, limₓ→ₐ f(x), etc.
+
+7. Évite les longueurs inutiles. Va à l’essentiel avec clarté et rigueur. Ton ton doit être bienveillant et pédagogique.
+
+Voici maintenant la question à résoudre :
+`,
+
+        },
+        {
+          role: "user",
+          content: input,
+        },
+      ],
+      max_tokens: 500,
+      temperature: 0.7,
+    });
+
+    const fullResponse = completion.choices[0].message.content;
+    const trimmedResponse = fullResponse.split("\n").slice(0, 10).join("\n");
+
+    // ✅ Incrémenter seulement après succès
+    if (!limit) {
+      await QuestionLimit.create({ user: userId, count: 1, lastReset: today });
+    } else if (isNewMonth) {
+      limit.count = 1;
+      limit.lastReset = today;
+      await limit.save();
+    } else {
+      limit.count += 1;
+      await limit.save();
+    }
+
+    const updatedLimit = await QuestionLimit.findOne({ user: userId });
+    const remaining = maxTests - updatedLimit.count;
+
+    res.json({ response: trimmedResponse, remaining });
+  } catch (error) {
+    console.error("Erreur GPT :", error.message);
+    res.status(500).json({ error: "Erreur serveur ou OpenAI" });
+  }
+};
+
+
+
+
+
 
 const GEMINI_API_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
@@ -92,7 +204,7 @@ function cleanHtmlTags(text) {
     .replace(/<\/?[^>]+(>|$)/g, ''); // nettoie toute autre balise
 }
 
-// 📘 Contrôleur principal
+// 📘 pour la route Gratuit 
 const callGeminiGratuit = async (req, res) => {
   const { input } = req.body;
   const userId = req.user?._id;
@@ -111,11 +223,11 @@ const callGeminiGratuit = async (req, res) => {
       });
     }
 
-    const prompt = `
+const prompt = `
 Tu es un professeur de mathématiques s’adressant à des élèves du secondaire.
 
 🛑 Interdiction formelle :
-- N'utilise jamais LaTeX (pas de \`$\`, \`$$\`, \`\\int\`, etc.)
+- N'utilise jamais LaTeX (pas de \`\\$\`, \`\\$\\$\`, \`\\\\int\`, etc.)
 - N'utilise pas les balises HTML (<sub>, <sup>, etc.)
 - N'utilise aucun format informatique ou balisage.
 
@@ -130,22 +242,23 @@ Tu es un professeur de mathématiques s’adressant à des élèves du secondair
 - S = π × r²
 
 ❌ Exemples interdits :
-- $u_n = 2n$
+- \\$u_n = 2n\\$
 - <sub>n</sub>
-- \\int_a^b f(x) dx
+- \\\\int_a^b f(x) dx
 
-💡 Ta réponse doit être claire, pédagogique, et utiliser des caractères classiques ou Unicode, comme “∫”, “π”, “²”, etc.
+💡 Ta réponse doit être claire, pédagogique, précise et facile à comprendre pour un élève de collège ou de lycée.
 
-Maintenant, explique ou donne une piste de réflexion pour cette question : ${input}
+✍️ Très important :  
+Tu dois rédiger en bon français, sans aucune faute d’orthographe, de grammaire ni de frappe. Les phrases doivent être bien structurées et compréhensibles. Le texte doit être lisible comme dans un manuel scolaire imprimé.
 
 ❌ Tu dois ignorer toute question qui ne concerne pas les mathématiques (calcul, fonctions, dérivées, intégrales, limites, suites, géométrie, etc.).
 
 ❗ Si la question n’est **pas mathématique**, tu dois simplement répondre :
 “⛔ Désolé, je ne traite que des questions de mathématiques.”
 
-
-
+Maintenant, explique ou donne une piste de réflexion pour cette question : ${input}
 `;
+
 
     const response = await axios.post(
       `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`,
@@ -176,4 +289,166 @@ Maintenant, explique ou donne une piste de réflexion pour cette question : ${in
   }
 };
 
-module.exports = { callGeminiGratuit };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 📖 Visualisation d’un livre gratuit
+const viewGratuitBook = async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
+
+    if (!book) {
+      return res.status(404).json({ message: "Livre non trouvé." });
+    }
+
+    if (book.badge !== "gratuit") {
+      return res.status(403).json({ message: "Ce livre n'est pas gratuit." });
+    }
+
+    // Incrémenter le compteur de visualisation
+    book.viewCount = (book.viewCount || 0) + 1;
+    await book.save();
+
+    res.json({ viewUrl: book.fileUrl });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur serveur lors de la visualisation." });
+  }
+};
+
+// 📥 Téléchargement d’un livre gratuit
+const downloadGratuitBook = async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
+
+    if (!book) {
+      return res.status(404).json({ message: "Livre non trouvé." });
+    }
+
+    if (book.badge !== "gratuit") {
+      return res.status(403).json({ message: "Ce livre n'est pas gratuit." });
+    }
+
+    // Incrémenter le compteur de téléchargement
+    book.downloadCount = (book.downloadCount || 0) + 1;
+    await book.save();
+
+    res.json({ downloadUrl: book.fileUrl });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur serveur lors du téléchargement." });
+  }
+};
+
+
+
+
+// ✅ Télécharger un sujet gratuit + incrément
+const getGratuitExamSubjectUrl = async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id);
+    if (!exam) return res.status(404).json({ message: "Examen introuvable" });
+
+    if (exam.badge !== "gratuit") {
+      return res.status(403).json({ message: "Accès réservé aux examens gratuits" });
+    }
+
+    // ➕ Incrémenter le compteur
+    exam.subjectDownloadCount += 1;
+    await exam.save();
+
+    res.json({ subjectUrl: exam.subjectUrl });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur lors de l'accès au sujet" });
+  }
+};
+
+// ✅ Télécharger une correction gratuite + incrément
+const getGratuitExamCorrectionUrl = async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id);
+    if (!exam) return res.status(404).json({ message: "Examen introuvable" });
+
+    if (exam.badge !== "gratuit") {
+      return res.status(403).json({ message: "Accès réservé aux examens gratuits" });
+    }
+
+    // ➕ Incrémenter le compteur
+    exam.correctionDownloadCount += 1;
+    await exam.save();
+
+    res.json({ correctionUrl: exam.correctionUrl });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur lors de l'accès à la correction" });
+  }
+};
+
+
+
+
+
+const getGratuitVideoUrl = async (req, res) => {
+  const video = await Video.findById(req.params.id);
+  if (!video) return res.status(404).json({ message: "Vidéo introuvable" });
+
+  if (video.badge !== "gratuit") {
+    return res.status(403).json({ message: "Accès réservé aux vidéos gratuites" });
+  }
+
+  // ✅ Incrémenter compteur (si besoin)
+  video.viewCount = (video.viewCount || 0) + 1;
+  await video.save();
+
+  res.json({ videoUrl: video.videoUrl });
+};
+
+
+
+// ✅ Afficher tous les livres
+const getAllBooks = async (req, res) => {
+  try {
+    const books = await Book.find().sort({ createdAt: -1 });
+    res.json(books);
+  } catch (err) {
+    res.status(500).json({ message: "❌ Erreur lors de la récupération des livres." });
+  }
+};
+
+// ✅ Afficher un seul livre par ID
+const getBookById = async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
+    if (!book) return res.status(404).json({ message: "📘 Livre non trouvé." });
+
+    res.json(book);
+  } catch (err) {
+    res.status(500).json({ message: "❌ Erreur lors de la récupération du livre." });
+  }
+};
+
+
+
+module.exports = {
+   callGeminiGratuit,
+   callGTPTextGratuit,
+  viewGratuitBook,
+  downloadGratuitBook,
+  getGratuitExamSubjectUrl,
+  getGratuitExamCorrectionUrl,
+  getGratuitVideoUrl,
+  getAllBooks,
+  getBookById,
+
+
+};
+
+

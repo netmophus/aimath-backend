@@ -1,27 +1,67 @@
 const express = require("express");
 const router = express.Router();
-const { rechargeStudent } = require("../controllers/studentController");
-const { createOrUpdateStudentProfile } = require("../controllers/studentProfileController");
+
+const { createOrUpdateStudentProfile } = require("../controllers/studentController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const { authorizeRoles } = require("../middlewares/roleMiddleware");
+const StudentProfile = require("../models/studentProfileModel");
 
-// ✅ POST /api/student/profile
-router.post("/profile", authMiddleware, authorizeRoles("eleve"), createOrUpdateStudentProfile);
+const { uploadProfil, uploadToCloudinary } = require('../middlewares/uploadProfil');
+
+// POST /api/student/profile (avec photo upload)
+router.post(
+  '/profile',
+  authMiddleware,
+  authorizeRoles('eleve'),
+  uploadProfil,
+  uploadToCloudinary,
+  createOrUpdateStudentProfile
+);
 
 
-// // ❌ mais tu n’as pas défini cette fonction ou tu t'es trompé dans le chemin
-// router.post("/recharge", authMiddleware, authorizeRoles("eleve"), rechargeStudent); // <-- undefined
-
-router.get("/profile/me", authMiddleware, authorizeRoles("eleve"), async (req, res) => {
+router.get(
+  '/profile',
+  authMiddleware,
+  authorizeRoles('eleve'),
+  async (req, res) => {
     try {
-      const profile = await StudentProfile.findOne({ user: req.user._id });
-      if (!profile) {
-        return res.status(404).json({ message: "Profil non trouvé" });
+      const user = req.user;
+
+      console.log('🔍 Utilisateur connecté (eleve) :', user);
+
+      if (!user) {
+        return res.status(401).json({ message: "Utilisateur non autorisé." });
       }
-      res.json(profile);
+
+      const studentData = await StudentProfile.findOne({ user: user._id });
+
+      if (!studentData) {
+        console.warn('⚠️ Aucun profil élève trouvé pour cet utilisateur.');
+      }
+
+      res.json({
+        fullName: user.fullName,
+        phone: user.phone,
+        schoolName: user.schoolName,
+        city: user.city,
+        photo: user.photo,
+        level: studentData?.level || '',
+        classe: studentData?.classe || '',
+
+          // ✅ Ajoute ces deux lignes :
+  isSubscribed: user.isSubscribed,
+  subscriptionEnd: user.subscriptionEnd,
+      });
     } catch (err) {
+      console.error("❌ Erreur chargement profil élève :", err.message, err.stack);
+
       res.status(500).json({ message: "Erreur serveur." });
     }
-  });
+  }
+);
+
+
+
+
   
 module.exports = router;

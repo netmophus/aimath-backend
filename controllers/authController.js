@@ -2,6 +2,87 @@ const User = require("../models/userModel");
 const StudentProfile = require("../models/studentProfileModel");
 const jwt = require("jsonwebtoken");
 const { sendSMS } = require("../utils/sendSMS");
+const Otp = require("../models/OtpModel");
+const bcrypt = require("bcryptjs");
+
+
+const sendResetCode = async (req, res) => {
+  const { phone } = req.body;
+
+  if (!phone) return res.status(400).json({ message: "Téléphone requis." });
+
+  const formattedPhone = phone.startsWith("+227") ? phone : `+227${phone.replace(/\D/g, "")}`;
+
+  try {
+    const user = await User.findOne({ phone: formattedPhone });
+    if (!user) {
+      return res.status(404).json({ message: "Aucun utilisateur avec ce téléphone." });
+    }
+
+    const code = Math.floor(1000 + Math.random() * 9000).toString(); // 4 chiffres
+    const expiration = new Date(Date.now() + 5 * 60 * 1000); // expire dans 5 min
+
+    await Otp.deleteMany({ phone: formattedPhone }); // Supprimer les anciens OTP
+   await Otp.create({ phone: formattedPhone, otp: code, expiresAt: expiration });
+
+
+    const sms = await sendSMS(
+      formattedPhone,
+      `🔐 Code de réinitialisation Fahimta : ${code}`
+    );
+
+    if (!sms.success) {
+      return res.status(500).json({ message: "Échec d'envoi du SMS." });
+    }
+
+    return res.status(200).json({ message: "✅ Code envoyé par SMS." });
+  } catch (error) {
+    console.error("❌ Erreur sendResetCode :", error);
+    res.status(500).json({ message: "Erreur serveur." });
+  }
+};
+
+
+
+
+
+
+const resetPassword = async (req, res) => {
+  const { phone, otp, newPassword } = req.body;
+
+  const formatPhone = (input) => {
+    const digits = input.replace(/\D/g, "");
+    return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
+  };
+
+  const formattedPhone = formatPhone(phone);
+
+  try {
+    const otpEntry = await Otp.findOne({ phone: formattedPhone, otp });
+
+
+    if (!otpEntry) {
+      return res.status(400).json({ message: "Code invalide ou expiré." });
+    }
+
+    const user = await User.findOne({ phone: formattedPhone });
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé." });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    // Supprimer l'OTP après utilisation
+    await Otp.deleteOne({ _id: otpEntry._id });
+
+    res.json({ message: "✅ Mot de passe réinitialisé avec succès." });
+  } catch (err) {
+    console.error("❌ Erreur resetPassword :", err.message);
+    res.status(500).json({ message: "Erreur serveur." });
+  }
+};
+
 
 
 // 🔐 Générer token JWT
@@ -15,110 +96,113 @@ const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString(); //
 
 
 
-// const registerUser = async (req, res) => {
-//   const { phone, password, classLevel, role = "eleve" } = req.body;
-
-//   const formatPhone = (input) => {
-//     const digits = input.replace(/\D/g, "");
-//     return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
-//   };
-
-//   const formattedPhone = formatPhone(phone);
-
-//   try {
-//     const existingUser = await User.findOne({ phone: formattedPhone });
-//     if (existingUser) {
-//       return res.status(400).json({ message: "Ce numéro est déjà utilisé." });
-//     }
-
-//     // ⚠️ Si c’est un élève, on vérifie que classLevel est fourni
-//     if (role === "eleve" && !classLevel) {
-//       return res.status(400).json({ message: "Le niveau scolaire (classLevel) est requis." });
-//     }
-
-//     const otp = generateOTP();
-
-//     const smsResponse = await sendSMS(formattedPhone, `Votre code de vérification est : ${otp}`);
-//     if (!smsResponse.success) {
-//       return res.status(500).json({ message: "Échec de l'envoi du SMS. Veuillez réessayer." });
-//     }
-
-//     const newUserData = {
-//       phone: formattedPhone,
-//       password,
-//       otp,
-//       isVerified: false,
-//       role,
-//     };
-
-//     if (role === "eleve") {
-//       newUserData.classLevel = classLevel;
-//     }
-
-//     const user = await User.create(newUserData);
-
-//     res.status(201).json({
-//       message: "✅ Utilisateur enregistré. Veuillez vérifier votre téléphone.",
-//       phone: user.phone,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ message: "Erreur lors de l'inscription." });
-//   }
-// };
-
 const registerUser = async (req, res) => {
-  const { phone, password, fullName, schoolName, city, role = "eleve" } = req.body;
+  const {
+    phone,
+    email,
+    password,
+    fullName,
+    schoolName,
+    city,
+    role = "eleve",
+    provider,       // "google" ou "facebook"
+    providerId,     // ID renvoyé par Google/Facebook
+  } = req.body;
 
+  // 🔧 Formate le téléphone si présent
   const formatPhone = (input) => {
     const digits = input.replace(/\D/g, "");
     return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
   };
-
-  const formattedPhone = formatPhone(phone);
+  const formattedPhone = phone ? formatPhone(phone) : null;
 
   try {
-    const existingUser = await User.findOne({ phone: formattedPhone });
+    // 🔍 Vérifie s'il existe déjà un utilisateur (téléphone ou email ou providerId)
+    const existingUser = await User.findOne({
+      $or: [
+        { phone: formattedPhone },
+        { email },
+        { providerId },
+      ].filter((cond) => Object.values(cond)[0]), // enlève les valeurs null
+    });
+
     if (existingUser) {
-      return res.status(400).json({ message: "Ce numéro est déjà utilisé." });
+      return res.status(400).json({ message: "Un compte existe déjà avec ces identifiants." });
     }
 
-    // ✅ Vérification des champs obligatoires
+    // ✅ Vérifie les champs communs
     if (!fullName || !schoolName || !city) {
-      return res.status(400).json({ message: "Tous les champs sont requis (nom, école, ville)." });
+      return res.status(400).json({ message: "Nom, école et ville sont obligatoires." });
     }
 
-    const otp = generateOTP();
+    // 🧩 Si inscription via Google/Facebook
+    if (provider && providerId) {
+      const newUser = await User.create({
+        email,
+        fullName,
+        schoolName,
+        city,
+        role,
+        provider,
+        providerId,
+          email, // ✅ AJOUTER ICI
+        isVerified: true,
+      });
 
+      return res.status(201).json({
+        message: "✅ Compte Google/Facebook créé avec succès.",
+        token: generateToken(newUser._id),
+      });
+    }
+
+    // 🔐 Sinon, inscription classique → vérifier téléphone + mot de passe
+    if (!formattedPhone || !password) {
+      return res.status(400).json({
+        message: "Téléphone et mot de passe requis pour l'inscription classique.",
+      });
+    }
+
+    // 📩 Envoi OTP par SMS
+    const otp = generateOTP();
     const smsResponse = await sendSMS(
       formattedPhone,
       `Votre code de vérification est : ${otp}`
     );
 
+
+//     // 📩 Envoi OTP par SMS (DÉSACTIVÉ TEMPORAIREMENT EN DEV)
+// const otp = generateOTP();
+
+// // Simuler une réussite sans envoyer de SMS
+// const smsResponse = { success: true };
+
+// Si tu veux logguer que c'est désactivé
+console.log(`🔕 Envoi de SMS désactivé. OTP simulé pour ${formattedPhone} : ${otp}`);
+
+
     if (!smsResponse.success) {
       return res.status(500).json({ message: "Échec de l'envoi du SMS. Veuillez réessayer." });
     }
 
-    const newUserData = {
+    const user = await User.create({
       phone: formattedPhone,
+       email, // ← ✅ ajoute ceci
       password,
-      otp,
-      isVerified: false,
-      role,
       fullName,
       schoolName,
       city,
-    };
+      role,
+      otp,
+      isVerified: false,
+    });
 
-    const user = await User.create(newUserData);
-
-    res.status(201).json({
+    return res.status(201).json({
       message: "✅ Utilisateur enregistré. Veuillez vérifier votre téléphone.",
       phone: user.phone,
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Erreur lors de l'inscription." });
+    console.error("❌ Erreur lors de l'inscription :", error);
+    res.status(500).json({ message: "Erreur serveur lors de l'inscription." });
   }
 };
 
@@ -168,116 +252,80 @@ const verifyOTP = async (req, res) => {
 
 
 
+
 const loginUser = async (req, res) => {
-  const { phone, password } = req.body;
-
-  const formatPhone = (input) => {
-    const digits = input.replace(/\D/g, "");
-    return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
-  };
-
-  const formattedPhone = formatPhone(phone);
-
-  console.log("🔐 Tentative de connexion pour :", formattedPhone);
+  const { phone, email, password, provider, providerId, fullName } = req.body;
 
   try {
-    const user = await User.findOne({ phone: formattedPhone });
+    // ✅ Connexion via Google
+   if (provider === "google" && providerId && email) {
+  let user = await User.findOne({ email });
 
-    if (!user) {
-      console.log("❌ Utilisateur non trouvé.");
-      return res.status(401).json({ message: "Téléphone ou mot de passe invalide." });
+  if (!user) {
+    user = await User.create({
+      email,
+      provider,
+      providerId,
+      fullName: fullName || "Utilisateur Google",
+      schoolName: "École non précisée",   // ← ajouté
+      city: "Ville non précisée",         // ← ajouté
+      role: "eleve",
+      isVerified: true,
+       
+    });
+  }
+
+
+      return res.json({
+        _id: user._id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        token: generateToken(user._id),
+        profileCompleted: user.profileCompleted,
+      });
     }
 
-    const isMatch = await user.matchPassword(password);
+    // ✅ Connexion classique par téléphone ou email
+    if ((phone || email) && password) {
+      const query = phone
+        ? { phone: phone.startsWith("+") ? phone : `+227${phone}` }
+        : { email };
 
-    if (!isMatch) {
-      console.log("❌ Mot de passe incorrect.");
-      return res.status(401).json({ message: "Téléphone ou mot de passe invalide." });
+      const user = await User.findOne(query);
+
+      if (!user) {
+        return res.status(401).json({ message: "Identifiants invalides." });
+      }
+
+      if (user.isActive === false) {
+  return res.status(403).json({ message: "Votre compte a été désactivé." });
+}
+
+      const isMatch = await user.matchPassword(password);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Mot de passe incorrect." });
+      }
+
+      return res.json({
+        _id: user._id,
+        phone: user.phone,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        isSubscribed: user.isSubscribed, // ✅ très important
+        token: generateToken(user._id),
+         profileCompleted: user.profileCompleted,
+      });
     }
 
-    console.log("✅ Connexion réussie pour :", user.fullName || user.phone);
-
-    const responseData = {
-      _id: user._id,
-      phone: user.phone,
-      role: user.role,
-      token: generateToken(user._id),
-      isSubscribed: user.isSubscribed || false,
-      fullName: user.fullName,
-      schoolName: user.schoolName,
-      city: user.city,
-    };
-
-    res.json(responseData);
+    // ❌ Cas non pris en charge
+    return res.status(400).json({ message: "Requête invalide." });
   } catch (error) {
     console.error("💥 Erreur lors de la connexion :", error);
-    res.status(500).json({ message: "Erreur lors de la connexion." });
+    return res.status(500).json({ message: "Erreur serveur." });
   }
 };
-
-
-//   const getMe = async (req, res) => {
-//     const user = req.user;
-  
-//     let studentProfile = null;
-  
-//     if (user.role === "eleve") {
-//       studentProfile = await StudentProfile.findOne({ user: user._id });
-//     }
-  
-//     // ✅ Log côté serveur
-//     console.log("📦 /auth/me → Données retournées :", {
-//       _id: user._id,
-//       phone: user.phone,
-//       role: user.role,
-//       isVerified: user.isVerified,
-//       ...(studentProfile && {
-//         isActive: studentProfile.isActive,
-//         balance: studentProfile.balance,
-//         subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
-//         dailyUsage: studentProfile.dailyUsage || 0,
-//       }),
-//     });
-  
-  
-
-
-//     res.json({
-//   _id: user._id,
-//   phone: user.phone,
-//   role: user.role,
-//   isVerified: user.isVerified,
-//   classLevel: user.classLevel, // ✅ ajoute cette ligne
-//   ...(studentProfile && {
-//     isActive: studentProfile.isActive,
-//     balance: studentProfile.balance,
-//     subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
-//     dailyUsage: studentProfile.dailyUsage || 0,
-//   }),
-
-
-
-
-// });
-
-//   };
-
-
-
-// const getMe = async (req, res) => {
-//   try {
-//     const user = await User.findById(req.user.id).select(
-//       "_id phone role isVerified fullName isSubscribed subscriptionStart subscriptionEnd schoolName city"
-//     );
-
-//     if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
-
-//     res.json(user);
-//   } catch (err) {
-//     console.error("❌ Erreur dans /auth/me :", err.message);
-//     res.status(500).json({ message: "Erreur serveur" });
-//   }
-// };
 
   
 
@@ -294,7 +342,8 @@ const getMe = async (req, res) => {
   console.log("📦 /auth/me → Données retournées :", {
     _id: user._id,
     phone: user.phone,
-    role: user.role,
+    role: user.role,   
+    fullName: user.fullName, // ✅ Ajouté ici
     isVerified: user.isVerified,
     isSubscribed: user.isSubscribed, // 👈 ajouté ici
     subscriptionStart: user.subscriptionStart,
@@ -304,27 +353,35 @@ const getMe = async (req, res) => {
       balance: studentProfile.balance,
       subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
       dailyUsage: studentProfile.dailyUsage || 0,
+       level: studentProfile.level,         // ✅ Ajouté ici
+    classe: studentProfile.classe,       // ✅ Ajouté ici
     }),
   });
 
   // ✅ Réponse envoyée au frontend
-  res.json({
-    _id: user._id,
-    phone: user.phone,
-    role: user.role,
-    isVerified: user.isVerified,
-    classLevel: user.classLevel,
-    isSubscribed: user.isSubscribed, // 👈 ici aussi
-    subscriptionStart: user.subscriptionStart,
-    subscriptionEnd: user.subscriptionEnd,
-    ...(studentProfile && {
-      isActive: studentProfile.isActive,
-      balance: studentProfile.balance,
-      subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
-      dailyUsage: studentProfile.dailyUsage || 0,
-    }),
-  });
+ res.json({
+  _id: user._id,
+  phone: user.phone,
+  role: user.role,
+  fullName: user.fullName,
+  email: user.email,
+  photo: user.photo, // ✅ AJOUT ICI
+  schoolName: user.schoolName, // ✅ AJOUT ICI
+  city: user.city, // ✅ AJOUT ICI
+  isVerified: user.isVerified,
+  isSubscribed: user.isSubscribed,
+  subscriptionStart: user.subscriptionStart,
+  subscriptionEnd: user.subscriptionEnd,
+  ...(studentProfile && {
+    level: studentProfile.level, // ✅ AJOUT ICI
+    classe: studentProfile.classe, // ✅ AJOUT ICI
+    isActive: studentProfile.isActive,
+    balance: studentProfile.balance,
+    subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
+    dailyUsage: studentProfile.dailyUsage || 0,
+  }),
+});
+
 };
 
-  
-module.exports = { registerUser, loginUser , verifyOTP, getMe};
+module.exports = { registerUser, loginUser , verifyOTP, getMe, sendResetCode, resetPassword };

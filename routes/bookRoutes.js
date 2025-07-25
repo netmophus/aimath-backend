@@ -10,9 +10,14 @@ router.post(
   "/",
   authMiddleware,
   authorizeRoles("admin"),
-  uploadBook, // ✅ c'est bien une fonction maintenant
+  uploadBook,
   bookController.createBook
 );
+
+
+// 🔓 Obtenir la liste des livres (accès public ou authentifié selon besoin)
+router.get("/", bookController.getAllBooks);
+
 
 // 🔐 Modifier un livre (admin uniquement)
 router.put(
@@ -31,10 +36,7 @@ router.delete(
   bookController.deleteBook
 );
 
-// 🌍 Afficher tous les livres (public)
-router.get("/", bookController.getAllBooks);
-
-// 🌍 Afficher un seul livre par ID (optionnel)
-router.get("/:id", bookController.getBookById);
-
 module.exports = router;
+
+
+

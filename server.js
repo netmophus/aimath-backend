@@ -111,18 +111,24 @@ const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const cors = require("cors");
-
+  const cron = require("node-cron");
+const subscriptionReminderJob = require("./cron/subscriptionReminderJob");
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+
+
 // ✅ Origines autorisées
 const allowedOrigins = [
   'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://192.168.1.221:3000'
+  //  'http://localhost:3000',
+  //  'http://127.0.0.1:3000',
+  // 'http://192.168.0.100:3000',
+  // 'http://192.168.1.221:3000'
+
+ 
 ];
 
 // ✅ Middleware CORS dynamique
@@ -163,27 +169,70 @@ if (req.method === "OPTIONS") {
 });
 
 // ✅ Middleware JSON
-app.use(express.json());
+//app.use(express.json());
+
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ limit: '20mb', extended: true }));
+
 
 // ✅ Connexion MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connecté"))
   .catch(err => console.error("❌ Erreur MongoDB :", err));
 
+
+
+
+// 📆 Exécuter tous les jours à 8h du matin
+cron.schedule("0 8 * * *", () => {
+  console.log("📬 Lancement du rappel de fin d'abonnement...");
+  subscriptionReminderJob();
+});
+
+
 // ✅ Routes API
 app.use("/uploads", express.static("uploads"));
 app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/student", require("./routes/studentRoutes"));
+app.use("/api/students", require("./routes/studentRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/admin/books", require("./routes/bookRoutes"));
-app.use("/api/gemini", require("./routes/geminiRoutes"));
+app.use("/api/users", require("./routes/userRoutes"));
+
+
+
+// app.use("/api/books", require("./routes/publicBookRoutes")); // nouvelle route dédiée au téléchargement
+
+// app.use("/api/gemini", require("./routes/geminiRoutes"));
 app.use("/api/ia", require("./routes/imageRoutes"));
-app.use("/api/ia", require("./routes/aiRoutes"));
+// app.use("/api/ia", require("./routes/aiRoutes"));
 app.use("/api/ia/gratuit", require("./routes/gratuitRoutes"));
 app.use("/api/programmes", require("./routes/programmeRoutes"));
 app.use("/api/exams", require("./routes/examRoutes"));
 app.use("/api/videos", require("./routes/videoRoutes"));
 app.use("/api/payments", require("./routes/paymentRoutes"));
+app.use("/api/usage", require("./routes/usageRoutes"));
+app.use("/api/premium", require("./routes/premiumRoutes"));
+
+
+
+
+app.use("/api/student", require("./routes/studentChatRoutes"));
+
+
+app.use("/api/teacher", require("./routes/teacherChatRoutes"));
+
+
+
+app.use("/api/teachers", require("./routes/teacherRoutes"));
+
+// Utilisation des routes
+app.use("/api/support-requests", require("./routes/supReqRoutes"));
+
+
+
+// app.use('/api/profil', require("./routes/profilRoutes"));
+
+// app.use("/api/chat", require("./routes/chatRoutes"));
 
 // ✅ Route de test
 app.get("/", (req, res) => {
@@ -191,6 +240,10 @@ app.get("/", (req, res) => {
 });
 
 // ✅ Démarrage serveur
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur en ligne sur http://127.0.0.1:${PORT}`);
+// app.listen(PORT, () => {
+//   console.log(`🚀 Serveur en ligne sur http://127.0.0.1:${PORT}`);
+// });
+
+app.listen(PORT, '0.0.0.0', () => {
+ console.log(`🚀 Serveur en ligne sur http://192.168.1.221:${PORT}`);
 });

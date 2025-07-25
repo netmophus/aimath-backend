@@ -7,10 +7,7 @@ const studentProfileSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
-  fullName: {
-    type: String,
-    required: true,
-  },
+
   level: {
     type: String,
     enum: ["college", "lycee"],
@@ -35,12 +32,8 @@ const studentProfileSchema = new mongoose.Schema({
   lastUsageDate: {
     type: Date,
     default: null,
-  },
-  
-  isActive: {
-    type: Boolean,
-    default: false,
-  },
+  },  
+ 
   subscriptionExpiresAt: {
     type: Date,
     default: null,

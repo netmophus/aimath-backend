@@ -1,0 +1,42 @@
+const mongoose = require("mongoose");
+
+const messageSchema = new mongoose.Schema(
+  {
+    from: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User", // l’expéditeur
+      required: true,
+    },
+    to: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User", // le destinataire
+      required: true,
+    },
+    text: {
+      type: String,
+      default: "",
+    },
+    fileUrl: {
+      type: String,
+      default: "", // lien vers un fichier (PDF, image, etc.)
+    },
+    fileType: {
+      type: String,
+     enum: ["", "image", "pdf", "audio", "video"],
+      default: "",
+    },
+    isVoiceMessage: {
+      type: Boolean,
+      default: false,
+    },
+    read: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    timestamps: true, // createdAt pour l’ordre chronologique
+  }
+);
+
+module.exports = mongoose.model("Message", messageSchema);

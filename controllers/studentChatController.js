@@ -5,29 +5,10 @@ const Teacher = require("../models/Teacher"); // 👈 Assure-toi que ce modèle 
 const SupportRequest = require("../models/SupportRequest");
 const MessageHistory = require("../models/MessageHistory");
 
+const MessageNotification = require("../models/MessageNotification"); // <-- à importer
 
 
 
-
-
-
-// const getMessageHistory = async (req, res) => {
-//   const { teacher, student } = req.query;
-
-//   try {
-//     const messages = await MessageHistory.find({
-//       $or: [
-//         { from: teacher, to: student },
-//         { from: student, to: teacher },
-//       ],
-//     }).sort({ createdAt: 1 });
-
-//     res.status(200).json(messages);
-//   } catch (error) {
-//     console.error("❌ Erreur récupération historique :", error);
-//     res.status(500).json({ message: "Erreur serveur" });
-//   }
-// };
 
 
 
@@ -62,34 +43,6 @@ const getMessageHistory = async (req, res) => {
 };
 
 
-
-// const getAvailableTeachers = async (req, res) => {
-//   try {
-//     const studentId = req.user._id;
-
-//     // Trouver tous les enseignants ayant accepté une requête de cet élève et démarré une session
-//     const validRequests = await SupportRequest.find({
-//       student: studentId,
-//       status: "acceptee",
-//       sessionStarted: true,
-//     }).populate("teacher", "fullName photo city schoolName subjects levels");
-
-//     // Extraire les enseignants sans doublon
-//     const teachers = validRequests
-//       .map((req) => req.teacher)
-//       .filter((t) => t); // supprime les null si jamais
-
-//     res.json(teachers);
-//   } catch (err) {
-//     console.error("Erreur getAvailableTeachers:", err);
-//     res.status(500).json({ message: "Erreur lors du chargement des enseignants." });
-//   }
-// };
-
-
-
-// 📩 Récupérer les messages avec un enseignant donné
-// 📩 Récupérer les messages avec un enseignant donné
 
 const getAvailableTeachers = async (req, res) => {
   try {
@@ -162,7 +115,7 @@ const getMessagesWithTeacher = async (req, res) => {
 };
 
 
-// ✉️ Envoyer un message à un enseignant
+
 // ✉️ Envoyer un message à un enseignant
 const sendMessageToTeacher = async (req, res) => {
   const studentId = req.user._id;
@@ -191,6 +144,17 @@ const sendMessageToTeacher = async (req, res) => {
       isVoiceMessage: false,
     });
 
+
+
+        // ✅ Créer une notification pour l'enseignant
+    await MessageNotification.create({
+      user: to, // destinataire = l'enseignant
+      from: studentId, // expéditeur = l'élève
+      messageId: newMessage._id,
+      messageSnippet: text.substring(0, 50), // extrait du message
+    });
+
+
     await newMessage.populate("from", "_id fullName");
     await newMessage.populate("to", "_id fullName");
 
@@ -203,71 +167,6 @@ const sendMessageToTeacher = async (req, res) => {
 
 
 
-
-// const uploadChatFile = async (req, res) => {
-//   try {
-//     console.log("🟢 Étape 1 - Entrée dans uploadChatFile");
-//     const senderId = req.user._id;
-//     const { to } = req.body;
-
-//     console.log("🔵 Étape 2 - Contenu de req.user :", req.user);
-//     console.log("🔵 Étape 3 - Contenu de req.body :", req.body);
-
-//     if (!req.file) {
-//       console.error("❌ Étape 4 - Aucun fichier reçu dans req.file");
-//       return res.status(400).json({ message: "Aucun fichier reçu." });
-//     }
-
-//     console.log("🟡 Étape 5 - Contenu complet de req.file :");
-//     console.dir(req.file, { depth: null });
-
-//     if (!to) {
-//       console.error("❌ Étape 6 - Champ 'to' manquant dans req.body");
-//       return res.status(400).json({ message: "Destinataire manquant." });
-//     }
-
-//     let fileType = "";
-//     const mime = req.file.mimetype;
-//     console.log("🟣 Étape 7 - mimetype détecté :", mime);
-
-//     if (mime.startsWith("image")) {
-//       fileType = "image";
-//     } else if (mime === "application/pdf") {
-//       fileType = "pdf";
-//     } else if (mime.startsWith("video")) {
-//       fileType = "video";
-//     } else if (mime.startsWith("audio")) {
-//       fileType = "audio";
-//     } else {
-//       console.error("❌ Étape 8 - Type de fichier non supporté :", mime);
-//       return res.status(400).json({ message: "Type de fichier non supporté." });
-//     }
-
-//     const fileUrl = req.file?.url || req.file?.path;
-//     console.log("🟤 Étape 9 - fileUrl détecté :", fileUrl);
-
-//     if (!fileUrl) {
-//       console.error("❌ Étape 10 - fileUrl manquant");
-//       return res.status(500).json({ message: "L’URL du fichier est manquante." });
-//     }
-
-//     const newMessage = await Message.create({
-//       from: senderId,
-//       to,
-//       text: "",
-//       fileUrl,
-//       fileType,
-//       isVoiceMessage: fileType === "audio",
-//     });
-
-//     console.log("🟢 Étape 11 - Message sauvegardé :", newMessage);
-//     res.status(201).json(newMessage);
-//   } catch (err) {
-//     console.error("❌ Étape 12 - Exception :", err.message);
-//     console.error(err.stack);
-//     res.status(500).json({ message: "Erreur serveur lors de l’envoi du fichier." });
-//   }
-// };
 
 
 

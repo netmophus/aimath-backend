@@ -209,3 +209,137 @@ exports.updateTeacherPhoto = async (req, res) => {
 
 
 
+
+
+/* Utilitaire : formatage téléphone -> +227XXXXXXXX */
+const formatPhone = (input = "") => {
+  const digits = String(input).replace(/\D/g, "");
+  if (!digits) return null;
+  return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
+};
+
+/* ===========================
+   ADMIN: liste des enseignants
+   GET /api/admin/teachers
+=========================== */
+exports.adminListTeachers = async (req, res) => {
+  try {
+    const teachers = await User.find({ role: "teacher" })
+      .select("fullName phone schoolName city isActive isVerified profileCompleted photo createdAt")
+      .sort({ createdAt: -1 });
+
+    return res.json(teachers);
+  } catch (err) {
+    console.error("adminListTeachers error:", err);
+    return res.status(500).json({ message: "Erreur serveur lors du listing des enseignants." });
+  }
+};
+
+/* ===========================
+   ADMIN: créer un enseignant (sans OTP)
+   POST /api/admin/teachers
+   body: { fullName, phone, password, schoolName, city }
+=========================== */
+exports.adminCreateTeacher = async (req, res) => {
+  try {
+    const { fullName, phone, password, schoolName, city } = req.body;
+
+    if (!fullName || !phone || !password || !schoolName || !city) {
+      return res.status(400).json({ message: "Nom, téléphone, mot de passe, école et ville sont obligatoires." });
+    }
+
+    const formattedPhone = formatPhone(phone);
+    if (!formattedPhone || formattedPhone.length < 12) {
+      return res.status(400).json({ message: "Téléphone invalide." });
+    }
+
+    const exists = await User.findOne({ phone: formattedPhone });
+    if (exists) {
+      return res.status(400).json({ message: "Un compte existe déjà avec ce téléphone." });
+    }
+
+    // Création SANS OTP
+    const user = new User({
+      role: "teacher",
+      fullName,
+      phone: formattedPhone,
+      password,
+      schoolName,
+      city,
+      provider: "local",
+      isVerified: true,         // pas d’OTP
+      isActive: true,
+      profileCompleted: false,
+    });
+
+    // Le modèle vérifie passwordConfirm en pre('validate'), on le renseigne donc :
+    user.passwordConfirm = password;
+
+    await user.save();
+
+    return res.status(201).json({
+      message: "✅ Enseignant créé avec succès.",
+      teacher: {
+        _id: user._id,
+        fullName: user.fullName,
+        phone: user.phone,
+        schoolName: user.schoolName,
+        city: user.city,
+        isActive: user.isActive,
+        isVerified: user.isVerified,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error("adminCreateTeacher error:", err);
+    return res.status(500).json({ message: "Erreur serveur lors de la création de l'enseignant." });
+  }
+};
+
+/* ===========================
+   ADMIN: activer/désactiver un enseignant
+   PATCH /api/admin/teachers/:id/toggle
+=========================== */
+exports.adminToggleTeacherActive = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const teacher = await User.findById(id);
+
+    if (!teacher || teacher.role !== "teacher") {
+      return res.status(404).json({ message: "Enseignant introuvable." });
+    }
+
+    teacher.isActive = !teacher.isActive;
+    await teacher.save();
+
+    return res.json({
+      message: `Enseignant ${teacher.isActive ? "activé" : "désactivé"} avec succès.`,
+      isActive: teacher.isActive,
+    });
+  } catch (err) {
+    console.error("adminToggleTeacherActive error:", err);
+    return res.status(500).json({ message: "Erreur serveur lors de la mise à jour du statut." });
+  }
+};
+
+/* ===========================
+   ADMIN: supprimer un enseignant
+   DELETE /api/admin/teachers/:id
+=========================== */
+exports.adminDeleteTeacher = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const teacher = await User.findById(id);
+    if (!teacher || teacher.role !== "teacher") {
+      return res.status(404).json({ message: "Enseignant introuvable." });
+    }
+
+    await User.findByIdAndDelete(id);
+    return res.json({ message: "🗑️ Enseignant supprimé avec succès." });
+  } catch (err) {
+    console.error("adminDeleteTeacher error:", err);
+    return res.status(500).json({ message: "Erreur serveur lors de la suppression." });
+  }
+};
+

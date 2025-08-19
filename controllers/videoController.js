@@ -2,6 +2,8 @@ const Video = require("../models/videoModel");
 const cloudinary = require("cloudinary").v2;
 const fs = require("fs");
 const { getOrCreateMonthlyUsage } = require("../utils/getOrCreateMonthlyUsage");
+const Notification = require('../models/Notification'); // adapte le chemin si besoin
+
 
 
 
@@ -86,6 +88,15 @@ const createVideo = async (req, res) => {
       videoUrl,
       thumbnail,
       videosSupplementaires,
+    });
+
+
+    // ✅ Création de la notification après ajout de la vidéo
+    await Notification.create({
+      userId: null, // notification globale
+      title: `🎥 Nouvelle vidéo ajoutée : ${title}`,
+      type: 'content',
+      linkTo: 'VideoList', // correspond à name dans <Stack.Screen name="VideoList" />
     });
 
     res.status(201).json(video);

@@ -1,6 +1,7 @@
 
 const { getOrCreateMonthlyUsage } = require("../utils/getOrCreateMonthlyUsage");
 const Book = require("../models/bookModel");
+const Notification = require('../models/Notification'); // modèle Mongoose
 
 
 // const createBook = async (req, res) => {
@@ -60,6 +61,17 @@ const createBook = async (req, res) => {
       coverImage,
       fileUrl, // ✅ tu prends directement le lien depuis le body
     });
+
+
+      await Notification.create({
+      userId: null, // notification globale
+      title: `📘 Nouveau livre ajouté : ${book.title}`,
+      type: 'content',
+      linkTo: 'BookList',
+      isReadBy: [],
+    });
+
+
 
     res.status(201).json(book);
   } catch (err) {

@@ -54,4 +54,12 @@ router.get(
 );
 
 
+// CRUD minimal
+router.get("/",  authMiddleware, authorizeRoles("admin"), teacherController.adminListTeachers);
+router.post("/",   authMiddleware,  authorizeRoles("admin"), teacherController.adminCreateTeacher);               // création sans OTP
+router.patch("/:id/toggle", authorizeRoles("admin"),   authMiddleware, teacherController.adminToggleTeacherActive);
+router.delete("/:id",   authMiddleware, authorizeRoles("admin"),  teacherController.adminDeleteTeacher);
+
+
+
 module.exports = router;

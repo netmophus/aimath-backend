@@ -2,6 +2,7 @@ const SupportRequest = require("../models/SupportRequest");
 const User = require("../models/userModel");
 const Message = require("../models/Message");
 const StudentProfile = require('../models/studentProfileModel'); // à adapter selon ton chemin
+const MessageNotification = require("../models/MessageNotification"); // ✅ à ajouter si pas encore fait
 
 
 // 📌 1. Récupérer les élèves associés à l'enseignant avec session active
@@ -123,6 +124,14 @@ const sendMessageToStudent = async (req, res) => {
     await newMsg.save();
     await newMsg.populate("from", "_id fullName photo");
     await newMsg.populate("to", "_id fullName photo");
+
+      // ✅ Création de la notification pour l'élève
+    await MessageNotification.create({
+      user: to, // 👈 élève destinataire
+      from: teacherId,
+      messageId: newMsg._id,
+      messageSnippet: text.slice(0, 100),
+    });
 
     res.status(201).json(newMsg);
   } catch (err) {

@@ -47,45 +47,94 @@ const sendResetCode = async (req, res) => {
 
 
 
+// const resetPassword = async (req, res) => {
+//   const { phone, otp, newPassword } = req.body;
+
+//   const formatPhone = (input) => {
+//     const digits = input.replace(/\D/g, "");
+//     return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
+//   };
+
+//   const formattedPhone = formatPhone(phone);
+
+//   try {
+//     const otpEntry = await Otp.findOne({ phone: formattedPhone, otp });
+
+
+//     if (!otpEntry) {
+//       return res.status(400).json({ message: "Code invalide ou expiré." });
+//     }
+
+//     const user = await User.findOne({ phone: formattedPhone });
+//     if (!user) {
+//       return res.status(404).json({ message: "Utilisateur non trouvé." });
+//     }
+
+//     user.password = newPassword;
+//     await user.save();
+
+//     // Supprimer l'OTP après utilisation
+//     await Otp.deleteOne({ _id: otpEntry._id });
+
+//     res.json({ message: "✅ Mot de passe réinitialisé avec succès." });
+//   } catch (err) {
+//     console.error("❌ Erreur resetPassword :", err.message);
+//     res.status(500).json({ message: "Erreur serveur." });
+//   }
+// };
+
+
+
+// 🔐 Générer token JWT
+
+
+
 const resetPassword = async (req, res) => {
-  const { phone, otp, newPassword } = req.body;
+  const { phone, otp, newPassword, confirmPassword } = req.body;
+
+  if (!phone || !otp || !newPassword || !confirmPassword) {
+    return res.status(400).json({ message: "Téléphone, OTP et deux mots de passe sont requis." });
+  }
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
+  }
 
   const formatPhone = (input) => {
-    const digits = input.replace(/\D/g, "");
+    const digits = String(input).replace(/\D/g, "");
     return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
   };
-
   const formattedPhone = formatPhone(phone);
 
   try {
     const otpEntry = await Otp.findOne({ phone: formattedPhone, otp });
-
-
-    if (!otpEntry) {
-      return res.status(400).json({ message: "Code invalide ou expiré." });
+    if (!otpEntry) return res.status(400).json({ message: "Code invalide ou expiré." });
+    if (otpEntry.expiresAt && otpEntry.expiresAt < new Date()) {
+      await Otp.deleteOne({ _id: otpEntry._id });
+      return res.status(400).json({ message: "Code expiré. Demandez un nouveau code." });
     }
 
     const user = await User.findOne({ phone: formattedPhone });
-    if (!user) {
-      return res.status(404).json({ message: "Utilisateur non trouvé." });
-    }
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé." });
 
+    user.provider = 'local';              // force le hook de hash
     user.password = newPassword;
+    user.passwordConfirm = newPassword;   // <-- FIX: aligne avec la validation du modèle
     await user.save();
 
-    // Supprimer l'OTP après utilisation
-    await Otp.deleteOne({ _id: otpEntry._id });
-
-    res.json({ message: "✅ Mot de passe réinitialisé avec succès." });
+    await Otp.deleteMany({ phone: formattedPhone });
+    return res.json({ message: "✅ Mot de passe réinitialisé avec succès." });
   } catch (err) {
-    console.error("❌ Erreur resetPassword :", err.message);
-    res.status(500).json({ message: "Erreur serveur." });
+    console.error("❌ Erreur resetPassword :", err);
+    return res.status(500).json({ message: "Erreur serveur." });
   }
 };
 
 
 
-// 🔐 Générer token JWT
+
+
+
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
@@ -96,17 +145,128 @@ const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString(); //
 
 
 
+// const registerUser = async (req, res) => {
+//   const {
+//     phone,
+//     email,
+//     password,
+//     fullName,
+//     schoolName,
+//     city,
+//     role = "eleve",
+//     provider,       // "google" ou "facebook"
+//     providerId,     // ID renvoyé par Google/Facebook
+//   } = req.body;
+
+//   // 🔧 Formate le téléphone si présent
+//   const formatPhone = (input) => {
+//     const digits = input.replace(/\D/g, "");
+//     return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
+//   };
+//   const formattedPhone = phone ? formatPhone(phone) : null;
+
+//   try {
+//     // 🔍 Vérifie s'il existe déjà un utilisateur (téléphone ou email ou providerId)
+//     const existingUser = await User.findOne({
+//       $or: [
+//         { phone: formattedPhone },
+//         { email },
+//         { providerId },
+//       ].filter((cond) => Object.values(cond)[0]), // enlève les valeurs null
+//     });
+
+//     if (existingUser) {
+//       return res.status(400).json({ message: "Un compte existe déjà avec ces identifiants." });
+//     }
+
+//     // ✅ Vérifie les champs communs
+//     if (!fullName || !schoolName || !city) {
+//       return res.status(400).json({ message: "Nom, école et ville sont obligatoires." });
+//     }
+
+//     // 🧩 Si inscription via Google/Facebook
+//     if (provider && providerId) {
+//       const newUser = await User.create({
+//         email,
+//         fullName,
+//         schoolName,
+//         city,
+//         role,
+//         provider,
+//         providerId,
+//           email, // ✅ AJOUTER ICI
+//         isVerified: true,
+//       });
+
+//       return res.status(201).json({
+//         message: "✅ Compte Google/Facebook créé avec succès.",
+//         token: generateToken(newUser._id),
+//       });
+//     }
+
+//     // 🔐 Sinon, inscription classique → vérifier téléphone + mot de passe
+//     if (!formattedPhone || !password) {
+//       return res.status(400).json({
+//         message: "Téléphone et mot de passe requis pour l'inscription classique.",
+//       });
+//     }
+
+//     // 📩 Envoi OTP par SMS
+//     const otp = generateOTP();
+//     const smsResponse = await sendSMS(
+//       formattedPhone,
+//       `Votre code de vérification est : ${otp}`
+//     );
+
+
+// //     // 📩 Envoi OTP par SMS (DÉSACTIVÉ TEMPORAIREMENT EN DEV)
+// // const otp = generateOTP();
+
+// // // Simuler une réussite sans envoyer de SMS
+// // const smsResponse = { success: true };
+
+// // Si tu veux logguer que c'est désactivé
+// console.log(`🔕 Envoi de SMS désactivé. OTP simulé pour ${formattedPhone} : ${otp}`);
+
+
+//     if (!smsResponse.success) {
+//       return res.status(500).json({ message: "Échec de l'envoi du SMS. Veuillez réessayer." });
+//     }
+
+//     const user = await User.create({
+//       phone: formattedPhone,
+//        email, // ← ✅ ajoute ceci
+//       password,
+//       fullName,
+//       schoolName,
+//       city,
+//       role,
+//       otp,
+//       isVerified: false,
+//     });
+
+//     return res.status(201).json({
+//       message: "✅ Utilisateur enregistré. Veuillez vérifier votre téléphone.",
+//       phone: user.phone,
+//     });
+//   } catch (error) {
+//     console.error("❌ Erreur lors de l'inscription :", error);
+//     res.status(500).json({ message: "Erreur serveur lors de l'inscription." });
+//   }
+// };
+
 const registerUser = async (req, res) => {
   const {
     phone,
     email,
     password,
+    confirmPassword,      // ✅ ajouté
     fullName,
     schoolName,
     city,
     role = "eleve",
-    provider,       // "google" ou "facebook"
-    providerId,     // ID renvoyé par Google/Facebook
+    provider,             // "google" ou "facebook"
+    providerId,           // ID renvoyé par Google/Facebook
   } = req.body;
 
   // 🔧 Formate le téléphone si présent
@@ -120,10 +280,10 @@ const registerUser = async (req, res) => {
     // 🔍 Vérifie s'il existe déjà un utilisateur (téléphone ou email ou providerId)
     const existingUser = await User.findOne({
       $or: [
-        { phone: formattedPhone },
-        { email },
-        { providerId },
-      ].filter((cond) => Object.values(cond)[0]), // enlève les valeurs null
+        formattedPhone ? { phone: formattedPhone } : null,
+        email ? { email } : null,
+        providerId ? { providerId } : null,
+      ].filter(Boolean),
     });
 
     if (existingUser) {
@@ -135,7 +295,7 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: "Nom, école et ville sont obligatoires." });
     }
 
-    // 🧩 Si inscription via Google/Facebook
+    // 🧩 Inscription via Google/Facebook (pas de mot de passe requis)
     if (provider && providerId) {
       const newUser = await User.create({
         email,
@@ -145,7 +305,6 @@ const registerUser = async (req, res) => {
         role,
         provider,
         providerId,
-          email, // ✅ AJOUTER ICI
         isVerified: true,
       });
 
@@ -155,11 +314,15 @@ const registerUser = async (req, res) => {
       });
     }
 
-    // 🔐 Sinon, inscription classique → vérifier téléphone + mot de passe
-    if (!formattedPhone || !password) {
+    // 🔐 Inscription classique → vérifier téléphone + mot de passe + confirmation
+    if (!formattedPhone || !password || !confirmPassword) {
       return res.status(400).json({
-        message: "Téléphone et mot de passe requis pour l'inscription classique.",
+        message: "Téléphone, mot de passe et confirmation requis pour l'inscription classique.",
       });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
     }
 
     // 📩 Envoi OTP par SMS
@@ -169,24 +332,17 @@ const registerUser = async (req, res) => {
       `Votre code de vérification est : ${otp}`
     );
 
-
-//     // 📩 Envoi OTP par SMS (DÉSACTIVÉ TEMPORAIREMENT EN DEV)
-// const otp = generateOTP();
-
-// // Simuler une réussite sans envoyer de SMS
-// const smsResponse = { success: true };
-
-// Si tu veux logguer que c'est désactivé
-console.log(`🔕 Envoi de SMS désactivé. OTP simulé pour ${formattedPhone} : ${otp}`);
-
+    // (en dev) log de l’OTP simulé
+    console.log(`🔕 Envoi de SMS désactivé. OTP simulé pour ${formattedPhone} : ${otp}`);
 
     if (!smsResponse.success) {
       return res.status(500).json({ message: "Échec de l'envoi du SMS. Veuillez réessayer." });
     }
 
-    const user = await User.create({
+    // ⚙️ Crée l'utilisateur (utilise la virtual passwordConfirm du modèle)
+    const user = new User({
       phone: formattedPhone,
-       email, // ← ✅ ajoute ceci
+      email,
       password,
       fullName,
       schoolName,
@@ -195,6 +351,9 @@ console.log(`🔕 Envoi de SMS désactivé. OTP simulé pour ${formattedPhone} :
       otp,
       isVerified: false,
     });
+    user.passwordConfirm = confirmPassword; // ✅ passe la confirmation au modèle (pre('validate'))
+
+    await user.save();
 
     return res.status(201).json({
       message: "✅ Utilisateur enregistré. Veuillez vérifier votre téléphone.",
@@ -205,7 +364,6 @@ console.log(`🔕 Envoi de SMS désactivé. OTP simulé pour ${formattedPhone} :
     res.status(500).json({ message: "Erreur serveur lors de l'inscription." });
   }
 };
-
 
 
 const verifyOTP = async (req, res) => {

@@ -7,10 +7,10 @@ const axios = require("axios");
 const { getOrCreateMonthlyUsage } = require("../utils/getOrCreateMonthlyUsage");
 const { callGeminiFromText } = require("../controllers/geminiController"); // ajuste le chemin
 
-const fs = require("fs").promises;
+// const fs = require("fs").promises;
 const path = require("path");
 const OpenAI = require("openai");
-
+const fs = require("fs/promises");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 
@@ -184,59 +184,147 @@ const callMathpixOCR = async (req, res) => {
  * Analyse une image (photo d'exercice) avec GPT-4o Vision
  * Retourne une explication mathématique en LaTeX prêt pour rendu KaTeX.
  */
+
+
 // const callGptVisionSolve = async (req, res) => {
 //   try {
-//     // Vérifs basiques
 //     if (!req.file) {
 //       return res.status(400).json({ message: "Aucune image reçue." });
 //     }
+
 //     const userId = req.user?._id;
 
-//     // Lis le fichier uploadé
-//     const imgPath = req.file.path;              // ex: uploads/abc.jpg
+// // 🔄 Vérification quota mensuel
+// const usage = await getOrCreateMonthlyUsage(userId);
+// if (usage.iaGptVisionQuestions >= 10) {
+//   return res.status(403).json({ message: "❌ Limite mensuelle atteinte (Vision)." });
+// }
+
+
+
+
+
+//     const imgPath = req.file.path;
 //     const mime = req.file.mimetype || "image/jpeg";
 //     const b64 = await fs.readFile(imgPath, { encoding: "base64" });
 //     const dataUri = `data:${mime};base64,${b64}`;
 
-//     // Prompt user facultatif envoyé depuis frontend (texte à côté de l'image)
-//     const userPrompt = req.body.prompt?.trim() || "Résous l'exercice présent sur cette image. Explique étape par étape et donne la solution finale. Utilise du LaTeX (\\[...\\]) pour les formules.";
+//     const userPrompt = `
+// Résous l'exercice présent sur cette image.
 
-//     // Appel OpenAI Vision
+// Tu es un professeur de mathématiques expérimenté. Présente la réponse comme dans un manuel scolaire imprimé.
+
+// ✅ Utilise des symboles typographiques lisibles :
+// • x², x⁴, √2, ∑ₖ₌₁ⁿ, limₓ→ₐ, uₙ, ∫₀¹, ≤, ≥, ≠, eˣ, etc.
+// • Pour les fractions : écris −5⁄3 (et non \\frac{-5}{3}).
+// • N'utilise jamais de \`$\`, \`$$\` ou balises LaTeX.
+// • Écris les étapes clairement, sans liste à puces, sans titres, comme un texte fluide.
+// Voici en plus d'autres règles STRICTES à suivre :
+
+// 1. Tu peux utiliser des formules en langage LaTeX, mais tu ne dois JAMAIS utiliser de balises Markdown (\`$\`, \`$$\`) ni d’éléments spécifiques à LaTeX comme \\mathbb, \\frac, \\lim, \\int, \\sum, etc. Tout doit être transformé en notation lisible et naturelle, comme dans un livre.
+
+// 2. Tous les symboles doivent apparaître dans leur version typographique lisible :
+//   uₙ au lieu de u_n
+
+// 2³ = 8 au lieu de 2^3
+
+// ∫₀¹ x² dx = ⅓ au lieu de \int_0^1 x^2 dx
+
+// limₓ→ₐ f(x) = L au lieu de \lim_{x \to a} f(x)
+
+// f′(x) au lieu de f'(x) ou df/dx
+
+// √2 au lieu de \sqrt{2}
+
+// x⁴ + 3x² − 5 au lieu de x^4 + 3x^2 - 5
+
+// ∆y/∆x ou dy/dx → utiliser la forme typographique et non d/dx brut
+
+// Σₖ₌₁ⁿ aₖ au lieu de \sum_{k=1}^n a_k
+
+// ∀x ∈ ℝ, ∃y ∈ ℕ… au lieu de \forall x \in \mathbb{R}, \exists y \in \mathbb{N}
+
+// x → +∞ au lieu de x \to +\infty
+
+// a ≠ b au lieu de a \ne b
+
+// a ≤ b et a ≥ b au lieu de a \le b, a \ge b
+
+// |x| au lieu de \lvert x \rvert
+
+// ⊂, ⊆, ∈, ∉, ∅, ℝ, ℕ, ℤ, ℚ, ℂ pour les ensembles usuels
+
+// ∘ pour la composition de fonctions (ex : f ∘ g)
+
+// ⟦1, n⟧ pour les intervalles entiers, ou [a, b], ]a, b[ pour les intervalles réels
+
+// ∂f/∂x pour les dérivées partielles (pas \partial f / \partial x)
+
+// eˣ au lieu de exp(x) ou e^x (si le contexte le permet)
+
+// Utilise toujours la notation eˣ au lieu de e^x ou exp(x) si le contexte le permet.
+
+// Si une constante initiale est présente, écris-la naturellement : a × eˣ (et non a * e^x).
+
+// Pour les exponentielles à base quelconque : aˣ au lieu de a^x.
+
+// Pour les dérivées :
+
+// d(eˣ)/dx = eˣ
+
+// d(aˣ)/dx = aˣ × ln(a)
+
+// Respecte également les notations naturelles pour les propriétés :
+
+// eˣ⁺ʸ = eˣ × eʸ
+
+// (aˣ)ʸ = aˣʸ
+
+// aˣ / aʸ = aˣ⁻ʸ
+
+//  explique clairement chaque formule et propriété, comme dans un cours ou un manuel imprimé.
+
+// 3. N’utilise JAMAIS de caractères pour faire du style (gras, italique, puces, tirets, deux-points après les titres, etc.).
+//    - Ne commence jamais une ligne par “-”, “•”, “*”, ou autre.
+//    - Ne fais pas de “**Suites arithmétiques :**”, ni de titres soulignés.
+//    - Chaque paragraphe doit être complet, sans liste.
+
+// 4. Structure ta réponse comme un texte fluide et continu, comme un chapitre de livre : plusieurs phrases liées, bien expliquées, sans liste.
+
+// 5. Ne fais une démonstration par récurrence que si elle est explicitement demandée dans l’énoncé.
+
+// 6. Ne dis jamais “on note $\mathbb{N}$” ou “on écrit $\lim_{x \\to a}$”. Tu dois écrire directement : ℕ, uₙ, limₓ→ₐ f(x), etc.
+
+// 7. Évite les longueurs inutiles. Va à l’essentiel avec clarté et rigueur. Ton ton doit être bienveillant et pédagogique.
+
+// Termine par la solution finale proprement.
+//     `.trim();
+
 //     const completion = await openai.chat.completions.create({
-//   model: "gpt-4o",
-//   messages: [
-//     {
-//       role: "system",
-//       content: "Tu es un professeur de mathématiques expérimenté. Réponds comme dans un manuel scolaire imprimé...",
-//     },
-//     {
-//       role: "user",
-//       content: [
+//       model: "gpt-4o-mini", // ou "gpt-4o" si besoin
+//       messages: [
 //         {
-//           type: "text",
-//           text: `
-// Résous l’exercice présent sur cette image.
-// Explique étape par étape et donne la solution finale.
-// Utilise les notations typographiques naturelles (ex: √2, limₓ→ₐ, ℝ, etc.).
-// `.trim()
+//           role: "system",
+//           content: "Tu es un professeur de mathématiques rigoureux, répondant comme dans un manuel scolaire imprimé.",
 //         },
 //         {
-//           type: "image_url",
-//           image_url: {
-//             url: dataUri, // ex: data:image/jpeg;base64,...
-//           }
-//         }
-//       ]
-//     }
-//   ],
-//   max_tokens: 1000,
-//   temperature: 0.3,
-// });
+//           role: "user",
+//           content: [
+//             { type: "text", text: userPrompt },
+//             { type: "image_url", image_url: { url: dataUri } },
+//           ],
+//         },
+//       ],
+//       max_tokens: 1000,
+//       temperature: 0.3,
+//     });
 
 //     const answer = completion.choices?.[0]?.message?.content?.trim() || "Pas de réponse.";
 
-//     // Nettoyage fichier uploadé (optionnel mais recommandé)
 //     try { await fs.unlink(imgPath); } catch (_) {}
+// // ✅ Mise à jour quota
+//       usage.iaGptVisionQuestions += 1;
+//       await usage.save();
 
 //     return res.json({ response: answer });
 //   } catch (err) {
@@ -249,6 +337,94 @@ const callMathpixOCR = async (req, res) => {
 // };
 
 
+
+
+// --- Typographie math : ^... → exposants Unicode
+const SUPER = {
+  '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
+  '+':'⁺','-':'⁻','=':'⁼','(':'⁽',')':'⁾',
+  a:'ᵃ',b:'ᵇ',c:'ᶜ',d:'ᵈ',e:'ᵉ',f:'ᶠ',g:'ᵍ',h:'ʰ',i:'ⁱ',j:'ʲ',k:'ᵏ',l:'ˡ',
+  m:'ᵐ',n:'ⁿ',o:'ᵒ',p:'ᵖ',r:'ʳ',s:'ˢ',t:'ᵗ',u:'ᵘ',v:'ᵛ',w:'ʷ',x:'ˣ',y:'ʸ',z:'ᶻ'
+};
+const toSuperscript = (s='') =>
+  s.replace(/[{}\s]/g,'').split('').map(c => SUPER[c] ?? c).join('');
+
+function typographizeMath(t='') {
+  let out = t;
+  // exp(x) → eˣ
+  out = out.replace(/exp\(([^)]+)\)/gi, (_, a) => 'e' + toSuperscript(a.trim()));
+  // e^(...) → eˣ
+  out = out.replace(/e\s*\^\s*\{?([^}]+)\}?/gi, (_, a) => 'e' + toSuperscript(a));
+  // a^b → aᵇ  (lettres)
+  out = out.replace(/([A-Za-z])\s*\^\s*\{?([A-Za-z])\}?/g, (_, b, e) => b + toSuperscript(e));
+  // x^2, (… )^−3 → x², (…)⁻³
+  out = out.replace(/(\S)\s*\^\s*\{?(-?\d+)\}?/g, (_, b, e) => b + toSuperscript(e));
+  return out;
+}
+
+
+
+
+
+async function askVisionWithFallback(
+  openai,
+  messages,
+  {
+    maxTokens = 1200,
+    temperature = 0.3,
+    models = ["gpt-5", "gpt-5-mini", "o4-mini", "gpt-4o-mini"],
+  } = {}
+) {
+  // Essai d’un modèle avec le bon paramètre; si “Unsupported parameter” → on inverse
+  const tryOnce = async (model, preferCompletionParam) => {
+    const buildPayload = (useCompletionParam) => ({
+      model,
+      messages,
+      temperature,
+      ...(useCompletionParam
+        ? { max_completion_tokens: maxTokens }
+        : { max_tokens: maxTokens }),
+    });
+
+    try {
+      const r = await openai.chat.completions.create(buildPayload(preferCompletionParam));
+      return (r.choices?.[0]?.message?.content || "").trim();
+    } catch (e) {
+      const raw = (e?.message || "") + " " + (e?.response?.data?.error?.message || "");
+      const unsupportedMaxTokens = /Unsupported parameter:\s*'max_tokens'|use 'max_completion_tokens'/i.test(raw);
+      const unsupportedMaxCompletion = /Unsupported parameter:\s*'max_completion_tokens'|use 'max_tokens'/i.test(raw);
+
+      // On inverse UNE FOIS si le param est refusé
+      if (unsupportedMaxTokens || unsupportedMaxCompletion) {
+        const r2 = await openai.chat.completions.create(buildPayload(!preferCompletionParam));
+        return (r2.choices?.[0]?.message?.content || "").trim();
+      }
+
+      // Si modèle non dispo → on laisse le for(...) gérer le fallback
+      if (e?.status === 404 || e?.code === "model_not_found") throw e;
+      // Autres erreurs → on les remonte
+      throw e;
+    }
+  };
+
+  // Heuristique : les modèles 5/o4 préfèrent max_completion_tokens
+  const prefersCompletionParam = (m) => /^gpt-5|^o4/i.test(m);
+
+  let lastErr;
+  for (const model of models) {
+    try {
+      return await tryOnce(model, prefersCompletionParam(model));
+    } catch (e) {
+      lastErr = e;
+      continue;
+    }
+  }
+  throw lastErr || new Error("Aucun modèle vision disponible.");
+}
+
+// ─────────────────────────────────────────────────────────────
+// Garde le même nom : callGptVisionSolve
+// ─────────────────────────────────────────────────────────────
 const callGptVisionSolve = async (req, res) => {
   try {
     if (!req.file) {
@@ -257,147 +433,96 @@ const callGptVisionSolve = async (req, res) => {
 
     const userId = req.user?._id;
 
-// 🔄 Vérification quota mensuel
-const usage = await getOrCreateMonthlyUsage(userId);
-if (usage.iaGptVisionQuestions >= 10) {
-  return res.status(403).json({ message: "❌ Limite mensuelle atteinte (Vision)." });
-}
+    // 🔄 Vérification quota mensuel
+    const usage = await getOrCreateMonthlyUsage(userId);
+    if (usage.iaGptVisionQuestions >= 10) {
+      return res.status(403).json({ message: "❌ Limite mensuelle atteinte (Vision)." });
+    }
 
-
-
-
-
+    // 🔁 Lecture et préparation de l'image
     const imgPath = req.file.path;
     const mime = req.file.mimetype || "image/jpeg";
     const b64 = await fs.readFile(imgPath, { encoding: "base64" });
     const dataUri = `data:${mime};base64,${b64}`;
 
+    // 🧠 Prompt professeur de maths (règles strictes conservées)
     const userPrompt = `
 Résous l'exercice présent sur cette image.
 
 Tu es un professeur de mathématiques expérimenté. Présente la réponse comme dans un manuel scolaire imprimé.
 
-✅ Utilise des symboles typographiques lisibles :
-• x², x⁴, √2, ∑ₖ₌₁ⁿ, limₓ→ₐ, uₙ, ∫₀¹, ≤, ≥, ≠, eˣ, etc.
-• Pour les fractions : écris −5⁄3 (et non \\frac{-5}{3}).
-• N'utilise jamais de \`$\`, \`$$\` ou balises LaTeX.
-• Écris les étapes clairement, sans liste à puces, sans titres, comme un texte fluide.
-Voici en plus d'autres règles STRICTES à suivre :
+✅ Utilise des symboles typographiques lisibles : x², x⁴, √2, ∑ₖ₌₁ⁿ, limₓ→ₐ, uₙ, ∫₀¹, ≤, ≥, ≠, eˣ, etc.
+Pour les fractions, écris −5⁄3 (et non \\frac{-5}{3}).
+N'utilise jamais de \`$\`, \`$$\` ou balises LaTeX.
+Écris les étapes clairement, sans listes à puces ni titres, comme un texte fluide.
 
-1. Tu peux utiliser des formules en langage LaTeX, mais tu ne dois JAMAIS utiliser de balises Markdown (\`$\`, \`$$\`) ni d’éléments spécifiques à LaTeX comme \\mathbb, \\frac, \\lim, \\int, \\sum, etc. Tout doit être transformé en notation lisible et naturelle, comme dans un livre.
-
-2. Tous les symboles doivent apparaître dans leur version typographique lisible :
-  uₙ au lieu de u_n
-
-2³ = 8 au lieu de 2^3
-
-∫₀¹ x² dx = ⅓ au lieu de \int_0^1 x^2 dx
-
-limₓ→ₐ f(x) = L au lieu de \lim_{x \to a} f(x)
-
-f′(x) au lieu de f'(x) ou df/dx
-
-√2 au lieu de \sqrt{2}
-
-x⁴ + 3x² − 5 au lieu de x^4 + 3x^2 - 5
-
-∆y/∆x ou dy/dx → utiliser la forme typographique et non d/dx brut
-
-Σₖ₌₁ⁿ aₖ au lieu de \sum_{k=1}^n a_k
-
-∀x ∈ ℝ, ∃y ∈ ℕ… au lieu de \forall x \in \mathbb{R}, \exists y \in \mathbb{N}
-
-x → +∞ au lieu de x \to +\infty
-
-a ≠ b au lieu de a \ne b
-
-a ≤ b et a ≥ b au lieu de a \le b, a \ge b
-
-|x| au lieu de \lvert x \rvert
-
-⊂, ⊆, ∈, ∉, ∅, ℝ, ℕ, ℤ, ℚ, ℂ pour les ensembles usuels
-
-∘ pour la composition de fonctions (ex : f ∘ g)
-
-⟦1, n⟧ pour les intervalles entiers, ou [a, b], ]a, b[ pour les intervalles réels
-
-∂f/∂x pour les dérivées partielles (pas \partial f / \partial x)
-
-eˣ au lieu de exp(x) ou e^x (si le contexte le permet)
-
-Utilise toujours la notation eˣ au lieu de e^x ou exp(x) si le contexte le permet.
-
-Si une constante initiale est présente, écris-la naturellement : a × eˣ (et non a * e^x).
-
-Pour les exponentielles à base quelconque : aˣ au lieu de a^x.
-
-Pour les dérivées :
-
-d(eˣ)/dx = eˣ
-
-d(aˣ)/dx = aˣ × ln(a)
-
-Respecte également les notations naturelles pour les propriétés :
-
-eˣ⁺ʸ = eˣ × eʸ
-
-(aˣ)ʸ = aˣʸ
-
-aˣ / aʸ = aˣ⁻ʸ
-
- explique clairement chaque formule et propriété, comme dans un cours ou un manuel imprimé.
-
-3. N’utilise JAMAIS de caractères pour faire du style (gras, italique, puces, tirets, deux-points après les titres, etc.).
-   - Ne commence jamais une ligne par “-”, “•”, “*”, ou autre.
-   - Ne fais pas de “**Suites arithmétiques :**”, ni de titres soulignés.
-   - Chaque paragraphe doit être complet, sans liste.
-
-4. Structure ta réponse comme un texte fluide et continu, comme un chapitre de livre : plusieurs phrases liées, bien expliquées, sans liste.
-
-5. Ne fais une démonstration par récurrence que si elle est explicitement demandée dans l’énoncé.
-
-6. Ne dis jamais “on note $\mathbb{N}$” ou “on écrit $\lim_{x \\to a}$”. Tu dois écrire directement : ℕ, uₙ, limₓ→ₐ f(x), etc.
-
-7. Évite les longueurs inutiles. Va à l’essentiel avec clarté et rigueur. Ton ton doit être bienveillant et pédagogique.
+1. Transforme toujours les notations LaTeX en écriture naturelle lisible.
+2. Symboles : uₙ, 2³, ∫₀¹ x² dx = ⅓, limₓ→ₐ f(x) = L, f′(x), √2, x⁴ + 3x² − 5, Δy/Δx,
+   Σₖ₌₁ⁿ aₖ, ℝ, ℕ, ℤ, ℚ, ℂ, ∈, ⊆, ∅, ∘, ⟦1, n⟧, [a, b], ]a, b[, ∂f/∂x, eˣ, aˣ, etc.
+   Dérivées: d(eˣ)/dx = eˣ ; d(aˣ)/dx = aˣ × ln(a).
+   Propriétés: eˣ⁺ʸ = eˣ × eʸ ; (aˣ)ʸ = aˣʸ ; aˣ / aʸ = aˣ⁻ʸ.
+3. Aucun style (gras/italique/listes). Paragraphes complets.
+4. Texte fluide, comme un chapitre de manuel.
+5. Pas de récurrence sauf si explicitement demandée.
+6. Écris directement ℝ, limₓ→ₐ, etc.
+7. Va à l’essentiel avec clarté et rigueur, ton bienveillant et pédagogique.
 
 Termine par la solution finale proprement.
     `.trim();
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // ou "gpt-4o" si besoin
-      messages: [
-        {
-          role: "system",
-          content: "Tu es un professeur de mathématiques rigoureux, répondant comme dans un manuel scolaire imprimé.",
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: userPrompt },
-            { type: "image_url", image_url: { url: dataUri } },
-          ],
-        },
-      ],
-      max_tokens: 1000,
+    // 💬 Messages multimodaux (texte + image)
+    const messages = [
+      {
+        role: "system",
+        content:
+          "Tu es un professeur de mathématiques rigoureux, répondant comme dans un manuel scolaire imprimé.",
+      },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: userPrompt },
+          { type: "image_url", image_url: { url: dataUri } },
+        ],
+      },
+    ];
+
+    // 🔮 GPT-5 prioritaire + fallback; switch auto max_tokens / max_completion_tokens
+    const answer = await askVisionWithFallback(openai, messages, {
+      maxTokens: 1200,        // <— on passe un seul chiffre; le helper gère le bon champ
       temperature: 0.3,
+      models: ["gpt-5", "gpt-5-mini", "o4-mini", "gpt-4o-mini"],
     });
 
-    const answer = completion.choices?.[0]?.message?.content?.trim() || "Pas de réponse.";
-
+    // 🧹 Nettoyage du fichier temporaire
     try { await fs.unlink(imgPath); } catch (_) {}
-// ✅ Mise à jour quota
-      usage.iaGptVisionQuestions += 1;
-      await usage.save();
 
-    return res.json({ response: answer });
+    // ✅ Mise à jour quota après succès
+    usage.iaGptVisionQuestions += 1;
+    await usage.save();
+
+    // return res.json({ response: answer || "Pas de réponse." });
+
+    return res.json({ response: typographizeMath(answer || "Pas de réponse.") });
+
   } catch (err) {
     console.error("❌ GPT-Vision erreur :", err?.response?.data || err.message || err);
+    // Essaie aussi de supprimer le fichier si une erreur est survenue
+    if (req?.file?.path) { try { await fs.unlink(req.file.path); } catch (_) {} }
+
     return res.status(503).json({
       message: "Erreur GPT-Vision.",
-      detail: err.message,
+      detail: err?.message || "inconnu",
     });
   }
 };
+
+
+
+
+
+
+
+
 
 
 

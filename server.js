@@ -125,8 +125,8 @@ const allowedOrigins = [
   'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
   //  'http://localhost:3000',
   //  'http://127.0.0.1:3000',
-  // 'http://192.168.0.100:3000',
-  // 'http://192.168.1.221:3000'
+  // 'http://192.168.1.221:3000',
+  // 'http://192.168.80.55:3000'
 
  
 ];
@@ -229,6 +229,12 @@ app.use("/api/teachers", require("./routes/teacherRoutes"));
 app.use("/api/support-requests", require("./routes/supReqRoutes"));
 
 
+app.use('/api/notifications', require('./routes/notificationsRoutes'));
+
+app.use("/api/message-notifications", require("./routes/messageNotificationRoutes"));
+
+
+
 
 // app.use('/api/profil', require("./routes/profilRoutes"));
 
@@ -245,5 +251,5 @@ app.get("/", (req, res) => {
 // });
 
 app.listen(PORT, '0.0.0.0', () => {
- console.log(`🚀 Serveur en ligne sur http://192.168.1.221:${PORT}`);
+ console.log(`🚀 Serveur en ligne sur http://192.168.80.55:${PORT}`);
 });

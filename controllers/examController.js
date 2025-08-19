@@ -1,4 +1,5 @@
 const Exam = require("../models/Exam");
+const Notification = require('../models/Notification'); // adapte le chemin si besoin
 
 
 
@@ -34,6 +35,14 @@ exports.createExam = async (req, res) => {
     });
 
     await newExam.save();
+
+    // ✅ Création de la notification
+    await Notification.create({
+      title: `📝 Nouvel examen ajouté : ${title}`,
+      type: 'content',
+      linkTo: 'ExamList', // Ce nom doit correspondre au nom de l'écran dans ton navigateur
+    });
+
 
     res.status(201).json({
       message: "✅ Sujet d'examen ajouté avec succès.",

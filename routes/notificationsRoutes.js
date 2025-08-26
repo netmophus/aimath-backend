@@ -1,59 +1,199 @@
+// const express = require('express');
+// const router = express.Router();
+// const Notification = require('../models/Notification');
+
+// // GET /api/notifications/unread/:userId
+// router.get('/unread/:userId', async (req, res) => {
+//   const { userId } = req.params;
+
+//   try {
+//     const notifications = await Notification.find({
+//       $or: [
+//         { userId: null }, // notifs générales
+//         { userId },       // notifs ciblées
+//       ],
+//       isReadBy: { $ne: userId } // pas encore lues par ce user
+//     }).sort({ createdAt: -1 });
+
+//     res.json({
+//       unreadCount: notifications.length,
+//       notifications,
+//     });
+//   } catch (err) {
+//     console.error('Erreur API notifications :', err);
+//     res.status(500).json({ message: 'Erreur serveur' });
+//   }
+// });
+
+
+// // Marquer une notification comme lue
+// router.post('/mark-as-read/:notificationId', async (req, res) => {
+//   const { notificationId } = req.params;
+//   const { userId } = req.body;
+
+//   if (!userId) {
+//     return res.status(400).json({ message: 'userId requis' });
+//   }
+
+//   try {
+//     const notification = await Notification.findById(notificationId);
+
+//     if (!notification) {
+//       return res.status(404).json({ message: 'Notification introuvable' });
+//     }
+
+//     // Évite les doublons
+//     if (!notification.isReadBy.includes(userId)) {
+//       notification.isReadBy.push(userId);
+//       await notification.save();
+//     }
+
+//     res.json({ message: 'Notification marquée comme lue' });
+//   } catch (err) {
+//     console.error('Erreur lors du marquage :', err);
+//     res.status(500).json({ message: 'Erreur serveur' });
+//   }
+// });
+
+
+// module.exports = router;
+
+
+
+
+
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Notification = require('../models/Notification');
 
-// GET /api/notifications/unread/:userId
+// Cast sûr en ObjectId
+const toObjectId = (id) =>
+  mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null;
+
+// Petit helper d'affichage des types contenus dans un array d'IDs
+const showIdTypes = (arr = []) =>
+  arr.map((x) => (x && x.constructor ? x.constructor.name : typeof x));
+
+/* -------------------------------------------
+ * GET /api/notifications/unread/:userId
+ * ----------------------------------------- */
 router.get('/unread/:userId', async (req, res) => {
   const { userId } = req.params;
+  if (!userId) return res.status(400).json({ message: 'userId requis' });
+
+  const uid = toObjectId(userId);
+  if (!uid) return res.status(400).json({ message: 'userId invalide' });
+  const uidStr = String(uid);
 
   try {
-    const notifications = await Notification.find({
-      $or: [
-        { userId: null }, // notifs générales
-        { userId },       // notifs ciblées
-      ],
-      isReadBy: { $ne: userId } // pas encore lues par ce user
-    }).sort({ createdAt: -1 });
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
+    const skip  = Math.max(parseInt(req.query.skip  || '0', 10), 0);
 
-    res.json({
-      unreadCount: notifications.length,
-      notifications,
-    });
+    const filter = {
+      $or: [{ userId: null }, { userId: uid }],
+      // Double $nin pour gérer ObjectId et d'anciens strings
+      $and: [
+        { isReadBy: { $nin: [uid] } },
+        { isReadBy: { $nin: [uidStr] } },
+      ],
+    };
+
+    console.log('🔎 [GET /unread] uid=', uidStr, 'limit=', limit, 'skip=', skip);
+
+    const [notifications, unreadCount] = await Promise.all([
+      Notification.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select('_id title message linkTo createdAt isReadBy')
+        .lean(),
+      Notification.countDocuments(filter),
+    ]);
+
+    // Log rapide des types d'IDs présents
+    console.log(
+      '📬 [GET /unread] count=',
+      unreadCount,
+      ' sampleTypes=',
+      notifications[0]?.isReadBy ? showIdTypes(notifications[0].isReadBy) : []
+    );
+
+    // On n'expose pas isReadBy au client
+    const sanitized = notifications.map(({ isReadBy, ...rest }) => rest);
+
+    res.json({ unreadCount, notifications: sanitized });
   } catch (err) {
-    console.error('Erreur API notifications :', err);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('💥 [GET /unread] Erreur:', err?.message, err?.stack);
+    res.status(500).json({ message: 'Erreur serveur', error: err?.message });
   }
 });
 
-
-// Marquer une notification comme lue
+/* -------------------------------------------------
+ * POST /api/notifications/mark-as-read/:notificationId
+ * ------------------------------------------------ */
 router.post('/mark-as-read/:notificationId', async (req, res) => {
   const { notificationId } = req.params;
   const { userId } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ message: 'userId requis' });
+  console.log('➡️ [POST mark-as-read] notifId=', notificationId, 'body=', req.body);
+
+  if (!userId) return res.status(400).json({ message: 'userId requis' });
+  if (!mongoose.Types.ObjectId.isValid(notificationId)) {
+    return res.status(400).json({ message: 'notificationId invalide' });
   }
+
+  const uid = toObjectId(userId);
+  if (!uid) return res.status(400).json({ message: 'userId invalide' });
 
   try {
-    const notification = await Notification.findById(notificationId);
-
-    if (!notification) {
+    // Avant maj : voir ce qu'on a
+    const before = await Notification.findById(notificationId).select('isReadBy userId');
+    if (!before) {
+      console.log('❔ [POST mark-as-read] Notification introuvable');
       return res.status(404).json({ message: 'Notification introuvable' });
     }
+    console.log(
+      '👀 [POST mark-as-read] before types=',
+      showIdTypes(before.isReadBy),
+      ' values=',
+      before.isReadBy?.map((x) => String(x))
+    );
 
-    // Évite les doublons
-    if (!notification.isReadBy.includes(userId)) {
-      notification.isReadBy.push(userId);
-      await notification.save();
-    }
+    // Ajout idempotent de l'ObjectId
+    const upd = await Notification.updateOne(
+      { _id: notificationId },
+      { $addToSet: { isReadBy: uid } }
+    );
 
-    res.json({ message: 'Notification marquée comme lue' });
+    console.log('🛠️ [POST mark-as-read] updateOne =>', upd);
+
+    // Après maj : vérifier contenu
+    const after = await Notification.findById(notificationId).select('isReadBy');
+    console.log(
+      '✅ [POST mark-as-read] after types=',
+      showIdTypes(after.isReadBy),
+      ' values=',
+      after.isReadBy?.map((x) => String(x))
+    );
+
+    // Recalcule du compteur fiable (ObjectId + string)
+    const uidStr = String(uid);
+    const filter = {
+      $or: [{ userId: null }, { userId: uid }],
+      $and: [
+        { isReadBy: { $nin: [uid] } },
+        { isReadBy: { $nin: [uidStr] } },
+      ],
+    };
+    const unreadCount = await Notification.countDocuments(filter);
+    console.log('🔢 [POST mark-as-read] unreadCount=', unreadCount);
+
+    res.json({ message: 'Notification marquée comme lue', unreadCount });
   } catch (err) {
-    console.error('Erreur lors du marquage :', err);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('💥 [POST mark-as-read] Erreur:', err?.message, err?.stack);
+    res.status(500).json({ message: 'Erreur serveur', error: err?.message });
   }
 });
-
 
 module.exports = router;

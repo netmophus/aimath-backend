@@ -1,6 +1,6 @@
 
 // const MonthlyUsage = require("../models/MonthlyUsage");
-// const User = require("../models/userModel"); // ✅ à importer
+// const User = require("../models/userModel");
 
 // const getCurrentPeriod = () => {
 //   const now = new Date();
@@ -16,16 +16,9 @@
 //     throw new Error("Utilisateur introuvable");
 //   }
 
-//   // ✅ Étape 2 : vérifier la validité de la souscription
-
-//   console.log("🔍 Vérification souscription :", {
-//   isSubscribed: user.isSubscribed,
-//   start: user.subscriptionStart,
-//   end: user.subscriptionEnd,
-//   now: now,
-// });
-
 //   const now = new Date();
+
+//   // ✅ Étape 2 : vérifier validité de la souscription
 //   const isValidSubscription =
 //     user.isSubscribed &&
 //     user.subscriptionStart &&
@@ -33,8 +26,15 @@
 //     now >= user.subscriptionStart &&
 //     now <= user.subscriptionEnd;
 
+//   // ❌ Souscription expirée → on annule et on bloque l’accès
 //   if (!isValidSubscription) {
-//     throw new Error("Vous n'avez pas de souscription active.");
+//     await User.findByIdAndUpdate(userId, {
+//       isSubscribed: false,
+//       subscriptionStart: null,
+//       subscriptionEnd: null,
+//     });
+
+//     throw new Error("Votre souscription est expirée. Veuillez souscrire à nouveau.");
 //   }
 
 //   // ✅ Étape 3 : vérifier ou créer le quota du mois
@@ -52,47 +52,71 @@
 
 
 
+
 const MonthlyUsage = require("../models/MonthlyUsage");
 const User = require("../models/userModel");
+const QuestionLimit = require("../models/QuestionLimit");
 
 const getCurrentPeriod = () => {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`; // ex: "2025-08"
 };
 
 const getOrCreateMonthlyUsage = async (userId) => {
   const period = getCurrentPeriod();
 
-  // ✅ Étape 1 : récupérer l'utilisateur
-  const user = await User.findById(userId);
-  if (!user) {
-    throw new Error("Utilisateur introuvable");
-  }
+  // 1) Récupérer l'utilisateur (champs utiles uniquement)
+  const user = await User.findById(userId).select("isSubscribed subscriptionStart subscriptionEnd");
+  if (!user) throw new Error("Utilisateur introuvable");
 
   const now = new Date();
+  const start = user.subscriptionStart ? new Date(user.subscriptionStart) : null;
+  const end   = user.subscriptionEnd ? new Date(user.subscriptionEnd) : null;
 
-  // ✅ Étape 2 : vérifier validité de la souscription
-  const isValidSubscription =
-    user.isSubscribed &&
-    user.subscriptionStart &&
-    user.subscriptionEnd &&
-    now >= user.subscriptionStart &&
-    now <= user.subscriptionEnd;
+  // 2) Vérifier la validité de la souscription
+  const isValidSubscription = Boolean(
+    user.isSubscribed && start && end && now >= start && now <= end
+  );
 
-  // ❌ Souscription expirée → on annule et on bloque l’accès
+  // 3) Souscription expirée → reset user + limites puis erreur
   if (!isValidSubscription) {
-    await User.findByIdAndUpdate(userId, {
-      isSubscribed: false,
-      subscriptionStart: null,
-      subscriptionEnd: null,
-    });
+    await Promise.all([
+      User.findByIdAndUpdate(userId, {
+        isSubscribed: false,
+        subscriptionStart: null,
+        subscriptionEnd: null,
+      }),
+
+      // Remet/initialise le compteur de questions
+      QuestionLimit.updateOne(
+        { user: userId },
+        { $set: { count: 0, lastReset: now } },
+        { upsert: true }
+      ),
+
+      // Remet/initialise les usages du mois courant
+      MonthlyUsage.updateOne(
+        { user: userId, period },
+        {
+          $set: {
+            booksDownloaded: 0,
+            videosWatched: 0,
+            iaGptVisionQuestions: 0,
+            examsDownloaded: 0,
+            examsCorrectionsDownloaded: 0,
+            iaTextQuestions: 0,
+            iaImageQuestions: 0,
+          },
+        },
+        { upsert: true }
+      ),
+    ]);
 
     throw new Error("Votre souscription est expirée. Veuillez souscrire à nouveau.");
   }
 
-  // ✅ Étape 3 : vérifier ou créer le quota du mois
+  // 4) Récupérer ou créer le quota du mois courant
   let usage = await MonthlyUsage.findOne({ user: userId, period });
-
   if (!usage) {
     usage = await MonthlyUsage.create({ user: userId, period });
   }

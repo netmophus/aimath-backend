@@ -487,23 +487,84 @@ const loginUser = async (req, res) => {
 
   
 
+// const getMe = async (req, res) => {
+//   const user = req.user;
+
+//   let studentProfile = null;
+
+//   if (user.role === "eleve") {
+//     studentProfile = await StudentProfile.findOne({ user: user._id });
+//   }
+
+//   // ✅ Log serveur
+//   console.log("📦 /auth/me → Données retournées :", {
+//     _id: user._id,
+//     phone: user.phone,
+//     role: user.role,   
+//     fullName: user.fullName, // ✅ Ajouté ici
+//     isVerified: user.isVerified,
+//     isSubscribed: user.isSubscribed, // 👈 ajouté ici
+//     subscriptionStart: user.subscriptionStart,
+//     subscriptionEnd: user.subscriptionEnd,
+//     ...(studentProfile && {
+//       isActive: studentProfile.isActive,
+//       balance: studentProfile.balance,
+//       subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
+//       dailyUsage: studentProfile.dailyUsage || 0,
+//        level: studentProfile.level,         // ✅ Ajouté ici
+//     classe: studentProfile.classe,       // ✅ Ajouté ici
+//     }),
+//   });
+
+//   // ✅ Réponse envoyée au frontend
+//  res.json({
+//   _id: user._id,
+//   phone: user.phone,
+//   role: user.role,
+//   fullName: user.fullName,
+//   email: user.email,
+//   photo: user.photo, // ✅ AJOUT ICI
+//   schoolName: user.schoolName, // ✅ AJOUT ICI
+//   city: user.city, // ✅ AJOUT ICI
+//   isVerified: user.isVerified,
+//   isSubscribed: user.isSubscribed,
+//   subscriptionStart: user.subscriptionStart,
+//   subscriptionEnd: user.subscriptionEnd,
+//   ...(studentProfile && {
+//     level: studentProfile.level, // ✅ AJOUT ICI
+//     classe: studentProfile.classe, // ✅ AJOUT ICI
+//     isActive: studentProfile.isActive,
+//     balance: studentProfile.balance,
+//     subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
+//     dailyUsage: studentProfile.dailyUsage || 0,
+//   }),
+// });
+
+// };
+
+
 const getMe = async (req, res) => {
   const user = req.user;
 
   let studentProfile = null;
-
   if (user.role === "eleve") {
     studentProfile = await StudentProfile.findOne({ user: user._id });
   }
 
-  // ✅ Log serveur
+  // Calcul dynamique de l'abonnement (source de vérité = dates)
+  const now = new Date();
+  const start = user.subscriptionStart ? new Date(user.subscriptionStart) : null;
+  const end   = user.subscriptionEnd ? new Date(user.subscriptionEnd) : null;
+  const isSubscribed = Boolean(end && end > now && (!start || now >= start));
+
+  // Log serveur
   console.log("📦 /auth/me → Données retournées :", {
     _id: user._id,
     phone: user.phone,
-    role: user.role,   
-    fullName: user.fullName, // ✅ Ajouté ici
+    role: user.role,
+    fullName: user.fullName,
     isVerified: user.isVerified,
-    isSubscribed: user.isSubscribed, // 👈 ajouté ici
+    isSubscribed, // ← calculé ici
     subscriptionStart: user.subscriptionStart,
     subscriptionEnd: user.subscriptionEnd,
     ...(studentProfile && {
@@ -511,35 +572,35 @@ const getMe = async (req, res) => {
       balance: studentProfile.balance,
       subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
       dailyUsage: studentProfile.dailyUsage || 0,
-       level: studentProfile.level,         // ✅ Ajouté ici
-    classe: studentProfile.classe,       // ✅ Ajouté ici
+      level: studentProfile.level,
+      classe: studentProfile.classe,
     }),
   });
 
-  // ✅ Réponse envoyée au frontend
- res.json({
-  _id: user._id,
-  phone: user.phone,
-  role: user.role,
-  fullName: user.fullName,
-  email: user.email,
-  photo: user.photo, // ✅ AJOUT ICI
-  schoolName: user.schoolName, // ✅ AJOUT ICI
-  city: user.city, // ✅ AJOUT ICI
-  isVerified: user.isVerified,
-  isSubscribed: user.isSubscribed,
-  subscriptionStart: user.subscriptionStart,
-  subscriptionEnd: user.subscriptionEnd,
-  ...(studentProfile && {
-    level: studentProfile.level, // ✅ AJOUT ICI
-    classe: studentProfile.classe, // ✅ AJOUT ICI
-    isActive: studentProfile.isActive,
-    balance: studentProfile.balance,
-    subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
-    dailyUsage: studentProfile.dailyUsage || 0,
-  }),
-});
-
+  // Réponse envoyée au frontend
+  res.json({
+    _id: user._id,
+    phone: user.phone,
+    role: user.role,
+    fullName: user.fullName,
+    email: user.email,
+    photo: user.photo,
+    schoolName: user.schoolName,
+    city: user.city,
+    isVerified: user.isVerified,
+    isSubscribed, // ← calculé ici
+    subscriptionStart: user.subscriptionStart,
+    subscriptionEnd: user.subscriptionEnd,
+    ...(studentProfile && {
+      level: studentProfile.level,
+      classe: studentProfile.classe,
+      isActive: studentProfile.isActive,
+      balance: studentProfile.balance,
+      subscriptionExpiresAt: studentProfile.subscriptionExpiresAt,
+      dailyUsage: studentProfile.dailyUsage || 0,
+    }),
+  });
 };
+
 
 module.exports = { registerUser, loginUser , verifyOTP, getMe, sendResetCode, resetPassword };

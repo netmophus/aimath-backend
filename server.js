@@ -123,10 +123,10 @@ const PORT = process.env.PORT || 5000;
 // ✅ Origines autorisées
 const allowedOrigins = [
   'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
-  //  'http://localhost:3000',
-  //  'http://127.0.0.1:3000',
-  // 'http://192.168.1.221:3000',
-  // 'http://192.168.80.55:3000'
+//     'http://localhost:3000',
+//    'http://127.0.0.1:3000',
+//   'http://192.168.1.221:3000',
+//  'http://192.168.80.55:3000'
 
  
 ];
@@ -251,5 +251,5 @@ app.get("/", (req, res) => {
 // });
 
 app.listen(PORT, '0.0.0.0', () => {
- console.log(`🚀 Serveur en ligne sur http://192.168.1.221:${PORT}`);
+ console.log(`🚀 Serveur en ligne sur http://192.168.80.55:${PORT}`);
 });

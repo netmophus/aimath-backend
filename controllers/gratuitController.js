@@ -7,6 +7,7 @@ const Video = require("../models/videoModel");
 const OpenAI = require("openai");
 
 
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -17,6 +18,7 @@ const openai = new OpenAI({
 // const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const MODEL_ID = process.env.OPENAI_MODEL_ID || "gpt-4o-mini"; // <= remplaçable par "o4-mini"
+
 
 const callGTPTextGratuit = async (req, res) => {
   try {
@@ -106,6 +108,9 @@ Propriétés: eˣ⁺ʸ = eˣ × eʸ ; (aˣ)ʸ = aˣʸ ; aˣ / aʸ = aˣ⁻ʸ.
     return res.status(500).json({ error: "Erreur serveur ou OpenAI" });
   }
 };
+
+
+
 
 
 

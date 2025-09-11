@@ -47,7 +47,17 @@ const supportRequestSchema = new mongoose.Schema(
   type: String,
   enum: ["en_attente", "acceptee", "refusee", "terminee"],
   default: "en_attente",
-}
+}, 
+
+
+
+  // --- Champs optionnels pour le suivi et la rémunération ---
+   awardedPoints:   { type: Number,  default: 0 },
+   countedForPayout:{ type: Boolean, default: false, index: true },
+   payoutMonth:     { type: String,  default: "" },   // ex: "2025-09"
+   completedAt:     { type: Date },
+
+
 
   },
   {

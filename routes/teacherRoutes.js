@@ -54,6 +54,26 @@ router.get(
 );
 
 
+
+
+// Historique des demandes acceptées/terminées (enseignant connecté)
+router.get(
+  "/support-requests/history",
+  authMiddleware,
+  authorizeRoles("teacher"),
+  teacherController.getAcceptedHistory
+);
+
+// Résumé de points/paiement du mois (enseignant connecté)
+router.get(
+  "/payout/me",
+  authMiddleware,
+  authorizeRoles("teacher"),
+  teacherController.getMyPayoutSummary
+);
+
+
+
 // CRUD minimal
 router.get("/",  authMiddleware, authorizeRoles("admin"), teacherController.adminListTeachers);
 router.post("/",   authMiddleware,  authorizeRoles("admin"), teacherController.adminCreateTeacher);               // création sans OTP

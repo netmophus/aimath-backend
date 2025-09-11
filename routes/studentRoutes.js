@@ -5,6 +5,8 @@ const { createOrUpdateStudentProfile } = require("../controllers/studentControll
 const authMiddleware = require("../middlewares/authMiddleware");
 const { authorizeRoles } = require("../middlewares/roleMiddleware");
 const StudentProfile = require("../models/studentProfileModel");
+const MonthlyUsage = require("../models/MonthlyUsage");
+
 
 const { uploadProfil, uploadToCloudinary } = require('../middlewares/uploadProfil');
 
@@ -60,6 +62,24 @@ router.get(
   }
 );
 
+
+// routes/studentRoutes.js
+// routes/studentRoutes.js
+const REQUESTS_PER_MONTH = Number(process.env.REQUESTS_PER_MONTH || 2);
+
+router.get("/me/requests-usage", authMiddleware, async (req, res) => {
+  try {
+    const period = new Date().toISOString().slice(0,7);
+    const usage = await MonthlyUsage.findOne({ user: req.user._id, period })
+      .select("supportRequestsCreated");
+    const used = usage?.supportRequestsCreated || 0;
+    const limit = REQUESTS_PER_MONTH;
+    return res.json({ period, used, limit, remaining: Math.max(0, limit - used) });
+  } catch (e) {
+    console.error("me/requests-usage error", e);
+    return res.status(500).json({ message: "Erreur serveur." });
+  }
+});
 
 
 

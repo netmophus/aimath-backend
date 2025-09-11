@@ -18,7 +18,15 @@ codes: [
     usedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     usedAt: { type: Date, default: null },
     createdAt: { type: Date, default: Date.now },
-    price: { type: Number, required: false }  // ✅ Nouveau champ optionnel
+    price: { type: Number, required: false },  // ✅ Nouveau champ optionnel
+
+     // ✅ nouveaux champs totalement optionnels (pour partenaires / traçabilité)
+      partner: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null }, // user role="partner"
+      assignedAt: { type: Date, default: null },
+      soldAt: { type: Date, default: null },
+      commissionCfa: { type: Number, default: 0 },   // commission figée à l’activation élève
+      serial: { type: String, default: "" },         // identifiant imprimé (si tu veux séparer du code)
+      activatedAt: { type: Date, default: null },    // date "activation commerciale" (status=activated)
   }
 ],
 

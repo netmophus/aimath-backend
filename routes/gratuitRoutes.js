@@ -20,27 +20,27 @@ const authMiddleware = require("../middlewares/authMiddleware");
 const { authorizeRoles } = require("../middlewares/roleMiddleware");
 
 // ✅ Appel IA (existant)
-router.post("/", authMiddleware, authorizeRoles("eleve"), callGeminiGratuit);
+router.post("/", authMiddleware, authorizeRoles("eleve", "teacher"), callGeminiGratuit);
 
-router.post("/gtp", authMiddleware, authorizeRoles("eleve"), callGTPTextGratuit);
+router.post("/gtp", authMiddleware, authorizeRoles("eleve", "teacher"), callGTPTextGratuit);
 
 
 // ✅ LIVRES GRATUITS – élève uniquement
-router.get("/:id/view", authMiddleware, authorizeRoles("eleve"), viewGratuitBook);
-router.get("/:id/download", authMiddleware, authorizeRoles("eleve"), downloadGratuitBook);
+router.get("/:id/view", authMiddleware, authorizeRoles("eleve", "teacher"), viewGratuitBook);
+router.get("/:id/download", authMiddleware, authorizeRoles("eleve", "teacher"), downloadGratuitBook);
 
 
 // 🌍 Afficher tous les livres (public)
-router.get("/", authMiddleware, authorizeRoles("eleve"), getAllBooks);
+router.get("/", authMiddleware, authorizeRoles("eleve", "teacher"), getAllBooks);
 
 // 🌍 Afficher un seul livre par ID (optionnel)
-router.get("/:id",authMiddleware, authorizeRoles("eleve"), getBookById);
+router.get("/:id",authMiddleware, authorizeRoles("eleve", "teacher"), getBookById);
 
 // ✅ EXAMENS GRATUITS – élève uniquement
-router.get("/:id/subject", authMiddleware, authorizeRoles("eleve"), getGratuitExamSubjectUrl);
-router.get("/:id/correction", authMiddleware, authorizeRoles("eleve"), getGratuitExamCorrectionUrl);
+router.get("/:id/subject", authMiddleware, authorizeRoles("eleve", "teacher"), getGratuitExamSubjectUrl);
+router.get("/:id/correction", authMiddleware, authorizeRoles("eleve", "teacher"), getGratuitExamCorrectionUrl);
 
 // ✅ VIDEOS GRATUITS – élève uniquement
-router.get("/:id/video", authMiddleware, authorizeRoles("eleve"), getGratuitVideoUrl);
+router.get("/:id/video", authMiddleware, authorizeRoles("eleve", "teacher"), getGratuitVideoUrl);
 
 module.exports = router;

@@ -8,18 +8,28 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
+const distributorRoutes = require("./routes/distributorRoutes");
 
 
 // ✅ Origines autorisées
-const allowedOrigins = [
-   'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
-  //   'http://localhost:3000',
-  //  'http://127.0.0.1:3000',
-  // 'http://192.168.80.55:3000',
+// const allowedOrigins = [
+//   //  'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
+//   //   'http://localhost:3000',
+//   //  'http://127.0.0.1:3000',
+//   'http://192.168.80.55:3000',
 
  
-];
+// ];
+
+
+const allowedOrigins = [
+
+ 'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
+//  'http://localhost:3000',
+//  'http://127.0.0.1:3000',
+//  'http://192.168.0.100:3000',
+//    'http://192.168.80.36:3000',
+ ];
 
 // ✅ Middleware CORS dynamique
 app.use(cors({
@@ -103,7 +113,8 @@ app.use("/api/payments", require("./routes/paymentRoutes"));
 app.use("/api/usage", require("./routes/usageRoutes"));
 app.use("/api/premium", require("./routes/premiumRoutes"));
 
-
+// API routes
+app.use("/api/distributors", distributorRoutes);
 
 
 app.use("/api/student", require("./routes/studentChatRoutes"));
@@ -136,10 +147,6 @@ app.get("/", (req, res) => {
 });
 
 // ✅ Démarrage serveur
-// app.listen(PORT, () => {
-//   console.log(`🚀 Serveur en ligne sur http://127.0.0.1:${PORT}`);
-// });
-
 app.listen(PORT, '0.0.0.0', () => {
- console.log(`🚀 Serveur en ligne sur http://:${PORT}`);
+ console.log(`🚀 Serveur en ligne sur http://192.168.80.36:${PORT}`);
 });

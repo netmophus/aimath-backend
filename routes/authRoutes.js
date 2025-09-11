@@ -1,25 +1,3 @@
-// const express = require("express");
-// const router = express.Router();
-// const { registerUser, loginUser } = require("../controllers/authController");
-// const { verifyOTP } = require("../controllers/authController");
-// const { getMe } = require("../controllers/authController");
-// const authMiddleware = require("../middlewares/authMiddleware");
-
-// // ✅ POST /api/auth/register
-// router.post("/register", registerUser);
-
-// // ✅ POST /api/auth/login
-// router.post("/login", loginUser);
-
-
-// router.post("/verify-otp", verifyOTP);
-
-// router.get("/me", authMiddleware, getMe);
-
-// module.exports = router;
-
-
-
 
 const express = require("express");
 const router = express.Router();
@@ -32,6 +10,36 @@ const {
   resetPassword,     // ✅ à ajouter
 } = require("../controllers/authController");
 const authMiddleware = require("../middlewares/authMiddleware");
+
+
+
+
+const User = require("../models/userModel");
+
+// ... (tes autres routes d'auth)
+
+// router.get("/me", authMiddleware, async (req, res) => {
+//   try {
+//     const u = await User.findById(req.user._id).lean();
+//     if (!u) return res.status(404).json({ message: "Utilisateur introuvable." });
+
+//     // on renvoie seulement les champs utiles (pas le hash du mot de passe)
+//     const {
+//       _id, phone, fullName, role, companyName, region, city,
+//       commissionDefaultCfa, isActive, createdAt, updatedAt, lastLoginAt
+//     } = u;
+
+//     return res.json({
+//       _id, phone, fullName, role, companyName, region, city,
+//       commissionDefaultCfa, isActive, createdAt, updatedAt, lastLoginAt
+//     });
+//   } catch (e) {
+//     console.error("/auth/me error:", e);
+//     res.status(500).json({ message: "Erreur serveur." });
+//   }
+// });
+
+
 
 router.post("/register", registerUser);
 router.post("/login", loginUser);

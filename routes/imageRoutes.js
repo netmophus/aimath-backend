@@ -37,7 +37,7 @@ router.post(
 router.post(
   "/gtptxtprenuim",
   authMiddleware,
-  authorizeRoles("eleve"),
+  authorizeRoles("eleve", "teacher"),
   callGptTxtPrenuim
 );
 
@@ -57,7 +57,7 @@ router.post(
 router.post(
   "/gpt",
   authMiddleware,
-  authorizeRoles("eleve"),
+  authorizeRoles("eleve", "teacher"),
   upload.single("image"),
   callGptVisionSolve
 );

@@ -3,7 +3,7 @@ const StudentProfile = require("../models/studentProfileModel");
 const jwt = require("jsonwebtoken");
 const { sendSMS } = require("../utils/sendSMS");
 const Otp = require("../models/OtpModel");
-const bcrypt = require("bcryptjs");
+
 
 
 const sendResetCode = async (req, res) => {
@@ -46,46 +46,6 @@ const sendResetCode = async (req, res) => {
 
 
 
-
-// const resetPassword = async (req, res) => {
-//   const { phone, otp, newPassword } = req.body;
-
-//   const formatPhone = (input) => {
-//     const digits = input.replace(/\D/g, "");
-//     return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
-//   };
-
-//   const formattedPhone = formatPhone(phone);
-
-//   try {
-//     const otpEntry = await Otp.findOne({ phone: formattedPhone, otp });
-
-
-//     if (!otpEntry) {
-//       return res.status(400).json({ message: "Code invalide ou expiré." });
-//     }
-
-//     const user = await User.findOne({ phone: formattedPhone });
-//     if (!user) {
-//       return res.status(404).json({ message: "Utilisateur non trouvé." });
-//     }
-
-//     user.password = newPassword;
-//     await user.save();
-
-//     // Supprimer l'OTP après utilisation
-//     await Otp.deleteOne({ _id: otpEntry._id });
-
-//     res.json({ message: "✅ Mot de passe réinitialisé avec succès." });
-//   } catch (err) {
-//     console.error("❌ Erreur resetPassword :", err.message);
-//     res.status(500).json({ message: "Erreur serveur." });
-//   }
-// };
-
-
-
-// 🔐 Générer token JWT
 
 
 
@@ -144,116 +104,6 @@ const generateToken = (id) => {
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString(); // 4 chiffres
 
 
-
-// const registerUser = async (req, res) => {
-//   const {
-//     phone,
-//     email,
-//     password,
-//     fullName,
-//     schoolName,
-//     city,
-//     role = "eleve",
-//     provider,       // "google" ou "facebook"
-//     providerId,     // ID renvoyé par Google/Facebook
-//   } = req.body;
-
-//   // 🔧 Formate le téléphone si présent
-//   const formatPhone = (input) => {
-//     const digits = input.replace(/\D/g, "");
-//     return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
-//   };
-//   const formattedPhone = phone ? formatPhone(phone) : null;
-
-//   try {
-//     // 🔍 Vérifie s'il existe déjà un utilisateur (téléphone ou email ou providerId)
-//     const existingUser = await User.findOne({
-//       $or: [
-//         { phone: formattedPhone },
-//         { email },
-//         { providerId },
-//       ].filter((cond) => Object.values(cond)[0]), // enlève les valeurs null
-//     });
-
-//     if (existingUser) {
-//       return res.status(400).json({ message: "Un compte existe déjà avec ces identifiants." });
-//     }
-
-//     // ✅ Vérifie les champs communs
-//     if (!fullName || !schoolName || !city) {
-//       return res.status(400).json({ message: "Nom, école et ville sont obligatoires." });
-//     }
-
-//     // 🧩 Si inscription via Google/Facebook
-//     if (provider && providerId) {
-//       const newUser = await User.create({
-//         email,
-//         fullName,
-//         schoolName,
-//         city,
-//         role,
-//         provider,
-//         providerId,
-//           email, // ✅ AJOUTER ICI
-//         isVerified: true,
-//       });
-
-//       return res.status(201).json({
-//         message: "✅ Compte Google/Facebook créé avec succès.",
-//         token: generateToken(newUser._id),
-//       });
-//     }
-
-//     // 🔐 Sinon, inscription classique → vérifier téléphone + mot de passe
-//     if (!formattedPhone || !password) {
-//       return res.status(400).json({
-//         message: "Téléphone et mot de passe requis pour l'inscription classique.",
-//       });
-//     }
-
-//     // 📩 Envoi OTP par SMS
-//     const otp = generateOTP();
-//     const smsResponse = await sendSMS(
-//       formattedPhone,
-//       `Votre code de vérification est : ${otp}`
-//     );
-
-
-// //     // 📩 Envoi OTP par SMS (DÉSACTIVÉ TEMPORAIREMENT EN DEV)
-// // const otp = generateOTP();
-
-// // // Simuler une réussite sans envoyer de SMS
-// // const smsResponse = { success: true };
-
-// // Si tu veux logguer que c'est désactivé
-// console.log(`🔕 Envoi de SMS désactivé. OTP simulé pour ${formattedPhone} : ${otp}`);
-
-
-//     if (!smsResponse.success) {
-//       return res.status(500).json({ message: "Échec de l'envoi du SMS. Veuillez réessayer." });
-//     }
-
-//     const user = await User.create({
-//       phone: formattedPhone,
-//        email, // ← ✅ ajoute ceci
-//       password,
-//       fullName,
-//       schoolName,
-//       city,
-//       role,
-//       otp,
-//       isVerified: false,
-//     });
-
-//     return res.status(201).json({
-//       message: "✅ Utilisateur enregistré. Veuillez vérifier votre téléphone.",
-//       phone: user.phone,
-//     });
-//   } catch (error) {
-//     console.error("❌ Erreur lors de l'inscription :", error);
-//     res.status(500).json({ message: "Erreur serveur lors de l'inscription." });
-//   }
-// };
 
 const registerUser = async (req, res) => {
   const {

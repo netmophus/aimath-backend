@@ -106,6 +106,12 @@ const getOrCreateMonthlyUsage = async (userId) => {
             examsCorrectionsDownloaded: 0,
             iaTextQuestions: 0,
             iaImageQuestions: 0,
+
+      // 👇 ajoute ceci
+            supportRequestsCreated: 0,
+            supportRequestsAccepted: 0,
+            supportRequestsFinished: 0,
+            
           },
         },
         { upsert: true }

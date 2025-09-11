@@ -21,7 +21,7 @@ router.post(
 router.get(
   "/watch/:id",
   authMiddleware,
-  authorizeRoles("eleve"),
+  authorizeRoles("eleve", "teacher"),
   videoController.watchVideo // ✅ version sans quota
 );
 

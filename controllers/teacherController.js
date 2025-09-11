@@ -4,6 +4,19 @@ const Message = require("../models/Message");
 const MessageHistory = require("../models/MessageHistory");
 
 const Teacher = require("../models/Teacher"); // assure-toi que c'est bien importé tout en haut
+const TeacherPayout = require("../models/TeacherPayout");
+
+
+// ADD — règles simples
+const PTS_PER_REQ = Number(process.env.PTS_PER_REQ || 1);          // 1 point par requête
+const PAY_PER_REQ_CFA = Number(process.env.PAY_PER_REQ_CFA || 20); // 20 FCFA par point
+
+// ADD — calcul du montant (pas de seuil/plafond)
+const computePayout = (points) => Math.floor(points) * PAY_PER_REQ_CFA;
+
+
+
+
 
 exports.updateTeacherProfile = async (req, res) => {
   try {
@@ -113,7 +126,26 @@ exports.updateSupportRequestStatus = async (req, res) => {
       }
 
       request.sessionStarted = false; // Fin de session
+
+
+// ▼▼▼ AJOUT ICI: figer la demande pour la paie
+const now = new Date();
+request.completedAt     = now;
+request.awardedPoints   = PTS_PER_REQ;                     // ex: 10
+request.payoutMonth     = now.toISOString().slice(0, 7);   // "YYYY-MM"
+request.countedForPayout = true;                           // marqué comme comptabilisé
+
+
+
+
     }
+
+
+    // marquage pour la rémunération (idempotent)
+if (!request.completedAt) request.completedAt = new Date();
+if (!request.payoutMonth) request.payoutMonth = new Date().toISOString().slice(0, 7);
+if (!request.awardedPoints || request.awardedPoints <= 0) request.awardedPoints = 1;
+
 
     if (status === "acceptee") {
       request.sessionStarted = true;
@@ -121,6 +153,82 @@ exports.updateSupportRequestStatus = async (req, res) => {
 
     request.status = status;
     await request.save();
+
+
+    // ─── AJOUT: si la demande vient d'être terminée, upsert le cumul mensuel ───
+// if (status === "terminee") {
+//   try {
+//     // sécurité minimale: il doit y avoir un enseignant et des points à incrémenter
+//     if (!request.teacher) {
+//       console.warn("[PAYOUT] Request terminée sans teacher:", request._id.toString());
+//     } else if (!request.awardedPoints || !request.payoutMonth) {
+//       console.warn("[PAYOUT] Request terminée sans awardedPoints/payoutMonth:", request._id.toString());
+//     } else {
+//       // upsert cumul mensuel (points + compteur)
+//       const tp = await TeacherPayout.findOneAndUpdate(
+//         { teacher: request.teacher, month: request.payoutMonth },
+//         {
+//           $inc: { points: request.awardedPoints, requestsCount: 1 },
+//           $setOnInsert: { capCfa: PAYOUT_CAP }
+//         },
+//         { new: true, upsert: true }
+//       );
+
+//       // recalcul du montant à verser (proportionnel jusqu'au plafond)
+//       const newPayout = computePayout(tp.points, PTS_THRESHOLD, PAYOUT_CAP);
+//       if (tp.payoutCfa !== newPayout) {
+//         tp.payoutCfa = newPayout;
+//         await tp.save();
+//       }
+
+//       console.log("[PAYOUT] Upsert OK →", {
+//         teacher: tp.teacher?.toString?.(),
+//         month: tp.month,
+//         points: tp.points,
+//         requestsCount: tp.requestsCount,
+//         payoutCfa: tp.payoutCfa
+//       });
+//     }
+//   } catch (e) {
+//     console.error("❌ [PAYOUT] Upsert error:", e?.message);
+//   }
+// }
+
+
+if (status === "terminee") {
+  try {
+    if (!request.teacher) {
+      console.warn("[PAYOUT] Request terminée sans teacher:", request._id.toString());
+    } else if (!request.awardedPoints || !request.payoutMonth) {
+      console.warn("[PAYOUT] Request terminée sans awardedPoints/payoutMonth:", request._id.toString());
+    } else {
+      const tp = await TeacherPayout.findOneAndUpdate(
+        { teacher: request.teacher, month: request.payoutMonth },
+        { $inc: { points: request.awardedPoints, requestsCount: 1 } },
+        { new: true, upsert: true }
+      );
+
+      const newPayout = computePayout(tp.points); // ← simple: points * 20 FCFA
+      if (tp.payoutCfa !== newPayout) {
+        tp.payoutCfa = newPayout;
+        await tp.save();
+      }
+
+      console.log("[PAYOUT] Upsert OK →", {
+        teacher: tp.teacher?.toString?.(),
+        month: tp.month,
+        points: tp.points,
+        requestsCount: tp.requestsCount,
+        payoutCfa: tp.payoutCfa
+      });
+    }
+  } catch (e) {
+    console.error("❌ [PAYOUT] Upsert error:", e?.message);
+  }
+}
+
+
+
 
     // ✅ Populate juste avant envoi
 const populatedRequest = await SupportRequest.findById(request._id).populate("student", "fullName schoolName city");
@@ -217,6 +325,9 @@ const formatPhone = (input = "") => {
   if (!digits) return null;
   return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
 };
+
+
+
 
 /* ===========================
    ADMIN: liste des enseignants
@@ -340,6 +451,70 @@ exports.adminDeleteTeacher = async (req, res) => {
   } catch (err) {
     console.error("adminDeleteTeacher error:", err);
     return res.status(500).json({ message: "Erreur serveur lors de la suppression." });
+  }
+};
+
+
+
+
+// ───────────────────────────────────────────────────────────
+//  Historique des demandes acceptées/terminées (enseignant)
+// GET /api/teachers/support-requests/history
+// ───────────────────────────────────────────────────────────
+exports.getAcceptedHistory = async (req, res) => {
+  try {
+    const teacherId = req.user._id;
+
+    const requests = await SupportRequest.find({
+      teacher: teacherId,
+      status: { $in: ["acceptee", "terminee"] },
+    })
+      .populate("student", "fullName schoolName city")
+      .sort({ updatedAt: -1 });
+
+    return res.json(requests);
+  } catch (err) {
+    console.error("getAcceptedHistory error:", err);
+    return res.status(500).json({ message: "Erreur serveur." });
+  }
+};
+
+// ───────────────────────────────────────────────────────────
+//  Résumé de points / paiement du mois (enseignant)
+// GET /api/teachers/payout/me?month=YYYY-MM
+// ───────────────────────────────────────────────────────────
+// GET /api/teachers/payout/me?month=YYYY-MM
+exports.getMyPayoutSummary = async (req, res) => {
+  try {
+    const teacherId = req.user._id;
+    const month = (req.query.month || new Date().toISOString().slice(0, 7)).slice(0, 7); // "YYYY-MM"
+
+    const start = new Date(`${month}-01T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setUTCMonth(end.getUTCMonth() + 1);
+
+    const RATE = Number(process.env.REWARD_PER_POINT || 80); // FCFA / point
+
+    const finished = await SupportRequest.find({
+      teacher: teacherId,
+      status: "terminee",
+      completedAt: { $gte: start, $lt: end },
+    }).select("awardedPoints");
+
+    const totalRequests = finished.length;
+    const totalPoints = finished.reduce((s, r) => s + (Number(r.awardedPoints) || 1), 0);
+    const amountCfa = totalPoints * RATE;
+
+    return res.json({
+      month,
+      totalRequests,
+      totalPoints,
+      rateCfaPerPoint: RATE,
+      amountCfa,
+    });
+  } catch (err) {
+    console.error("getMyPayoutSummary error:", err);
+    return res.status(500).json({ message: "Erreur serveur." });
   }
 };
 

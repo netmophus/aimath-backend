@@ -7,17 +7,17 @@ const { authorizeRoles } = require("../middlewares/roleMiddleware");
 
 
 // 🌍 Afficher tous les livres (public)
-router.get("/", authMiddleware, authorizeRoles("eleve"), premiumController.getAllBooks);
+router.get("/", authMiddleware, authorizeRoles("eleve", "teacher"), premiumController.getAllBooks);
 
 // 🌍 Afficher un seul livre par ID (optionnel)
-router.get("/:id",authMiddleware, authorizeRoles("eleve"), premiumController.getBookById);
+router.get("/:id",authMiddleware, authorizeRoles("eleve", "teacher"), premiumController.getBookById);
 
 
 // 🔐 Télécharger un livre (réservé aux élèves)
 router.get(
   "/books/:id/download",
   authMiddleware,
-  authorizeRoles("eleve"),
+  authorizeRoles("eleve", "teacher"),
   premiumController.downloadBookWithLimit
 );
 
@@ -25,7 +25,7 @@ router.get(
 router.get(
   "/books/:id/view",
   authMiddleware,
-  authorizeRoles("eleve"),
+  authorizeRoles("eleve", "teacher"),
   premiumController.viewBook
 );
 
@@ -33,14 +33,14 @@ router.get(
 router.get(
   "/exams/:id/download-subject",
   authMiddleware,
-  authorizeRoles("eleve"),
+  authorizeRoles("eleve", "teacher"),
   premiumController.downloadExamWithLimit
 );
 
 router.get(
   "/exams/:id/download-correction",
   authMiddleware,
-  authorizeRoles("eleve"),
+  authorizeRoles("eleve", "teacher"),
   premiumController.downloadCorrectionWithLimit
 );
 

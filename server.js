@@ -25,10 +25,12 @@ const distributorRoutes = require("./routes/distributorRoutes");
 const allowedOrigins = [
 
  'https://fahimtafrontend-cf7031f2fb20.herokuapp.com',
+  'https://myfahimta.com',
+    'https://www.myfahimta.com',
 //  'http://localhost:3000',
 //  'http://127.0.0.1:3000',
 //  'http://192.168.0.100:3000',
-//    'http://192.168.80.36:3000',
+ // 'http://192.168.80.36:3000',
  ];
 
 // ✅ Middleware CORS dynamique

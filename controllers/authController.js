@@ -283,6 +283,11 @@ const loginUser = async (req, res) => {
     });
   }
 
+user.lastLoginAt = new Date();
+user.loginCount = (user.loginCount || 0) + 1;
+await user.save({ validateBeforeSave: false });
+
+
 
       return res.json({
         _id: user._id,
@@ -314,6 +319,12 @@ const loginUser = async (req, res) => {
       if (!isMatch) {
         return res.status(401).json({ message: "Mot de passe incorrect." });
       }
+
+
+      // ➕ AJOUTE ICI (avant le return)
+    user.lastLoginAt = new Date();
+    user.loginCount = (user.loginCount || 0) + 1;
+    await user.save({ validateBeforeSave: false });
 
       return res.json({
         _id: user._id,

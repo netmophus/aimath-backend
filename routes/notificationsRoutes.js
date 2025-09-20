@@ -1,64 +1,3 @@
-// const express = require('express');
-// const router = express.Router();
-// const Notification = require('../models/Notification');
-
-// // GET /api/notifications/unread/:userId
-// router.get('/unread/:userId', async (req, res) => {
-//   const { userId } = req.params;
-
-//   try {
-//     const notifications = await Notification.find({
-//       $or: [
-//         { userId: null }, // notifs générales
-//         { userId },       // notifs ciblées
-//       ],
-//       isReadBy: { $ne: userId } // pas encore lues par ce user
-//     }).sort({ createdAt: -1 });
-
-//     res.json({
-//       unreadCount: notifications.length,
-//       notifications,
-//     });
-//   } catch (err) {
-//     console.error('Erreur API notifications :', err);
-//     res.status(500).json({ message: 'Erreur serveur' });
-//   }
-// });
-
-
-// // Marquer une notification comme lue
-// router.post('/mark-as-read/:notificationId', async (req, res) => {
-//   const { notificationId } = req.params;
-//   const { userId } = req.body;
-
-//   if (!userId) {
-//     return res.status(400).json({ message: 'userId requis' });
-//   }
-
-//   try {
-//     const notification = await Notification.findById(notificationId);
-
-//     if (!notification) {
-//       return res.status(404).json({ message: 'Notification introuvable' });
-//     }
-
-//     // Évite les doublons
-//     if (!notification.isReadBy.includes(userId)) {
-//       notification.isReadBy.push(userId);
-//       await notification.save();
-//     }
-
-//     res.json({ message: 'Notification marquée comme lue' });
-//   } catch (err) {
-//     console.error('Erreur lors du marquage :', err);
-//     res.status(500).json({ message: 'Erreur serveur' });
-//   }
-// });
-
-
-// module.exports = router;
-
-
 
 
 
@@ -66,6 +5,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const Notification = require('../models/Notification');
+const User = require('../models/userModel'); // ⚠️ chemin cohérent avec ton projet
 
 // Cast sûr en ObjectId
 const toObjectId = (id) =>
@@ -78,6 +18,59 @@ const showIdTypes = (arr = []) =>
 /* -------------------------------------------
  * GET /api/notifications/unread/:userId
  * ----------------------------------------- */
+// router.get('/unread/:userId', async (req, res) => {
+//   const { userId } = req.params;
+//   if (!userId) return res.status(400).json({ message: 'userId requis' });
+
+//   const uid = toObjectId(userId);
+//   if (!uid) return res.status(400).json({ message: 'userId invalide' });
+//   const uidStr = String(uid);
+
+//   try {
+//     const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
+//     const skip  = Math.max(parseInt(req.query.skip  || '0', 10), 0);
+
+//     const filter = {
+//       $or: [{ userId: null }, { userId: uid }],
+//       // Double $nin pour gérer ObjectId et d'anciens strings
+//       $and: [
+//         { isReadBy: { $nin: [uid] } },
+//         { isReadBy: { $nin: [uidStr] } },
+//       ],
+//     };
+
+//     console.log('🔎 [GET /unread] uid=', uidStr, 'limit=', limit, 'skip=', skip);
+
+//     const [notifications, unreadCount] = await Promise.all([
+//       Notification.find(filter)
+//         .sort({ createdAt: -1 })
+//         .skip(skip)
+//         .limit(limit)
+//         .select('_id title message linkTo createdAt isReadBy')
+//         .lean(),
+//       Notification.countDocuments(filter),
+//     ]);
+
+//     // Log rapide des types d'IDs présents
+//     console.log(
+//       '📬 [GET /unread] count=',
+//       unreadCount,
+//       ' sampleTypes=',
+//       notifications[0]?.isReadBy ? showIdTypes(notifications[0].isReadBy) : []
+//     );
+
+//     // On n'expose pas isReadBy au client
+//     const sanitized = notifications.map(({ isReadBy, ...rest }) => rest);
+
+//     res.json({ unreadCount, notifications: sanitized });
+//   } catch (err) {
+//     console.error('💥 [GET /unread] Erreur:', err?.message, err?.stack);
+//     res.status(500).json({ message: 'Erreur serveur', error: err?.message });
+//   }
+// });
+
+
+
 router.get('/unread/:userId', async (req, res) => {
   const { userId } = req.params;
   if (!userId) return res.status(400).json({ message: 'userId requis' });
@@ -87,19 +80,25 @@ router.get('/unread/:userId', async (req, res) => {
   const uidStr = String(uid);
 
   try {
+    // 🔎 Récupère l’utilisateur (createdAt existe déjà grâce à timestamps)
+    const user = await User.findById(uid).select('createdAt firstLoginAt');
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
+
+    // 🎯 baseline robuste : firstLoginAt si présent, sinon createdAt
+    const baseline = user.firstLoginAt || user.createdAt;
+
     const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
     const skip  = Math.max(parseInt(req.query.skip  || '0', 10), 0);
 
     const filter = {
       $or: [{ userId: null }, { userId: uid }],
-      // Double $nin pour gérer ObjectId et d'anciens strings
       $and: [
         { isReadBy: { $nin: [uid] } },
         { isReadBy: { $nin: [uidStr] } },
       ],
+      // 🧹 coupe le passé pour ce user
+      createdAt: { $gte: baseline },
     };
-
-    console.log('🔎 [GET /unread] uid=', uidStr, 'limit=', limit, 'skip=', skip);
 
     const [notifications, unreadCount] = await Promise.all([
       Notification.find(filter)
@@ -111,17 +110,7 @@ router.get('/unread/:userId', async (req, res) => {
       Notification.countDocuments(filter),
     ]);
 
-    // Log rapide des types d'IDs présents
-    console.log(
-      '📬 [GET /unread] count=',
-      unreadCount,
-      ' sampleTypes=',
-      notifications[0]?.isReadBy ? showIdTypes(notifications[0].isReadBy) : []
-    );
-
-    // On n'expose pas isReadBy au client
     const sanitized = notifications.map(({ isReadBy, ...rest }) => rest);
-
     res.json({ unreadCount, notifications: sanitized });
   } catch (err) {
     console.error('💥 [GET /unread] Erreur:', err?.message, err?.stack);

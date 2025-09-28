@@ -25,7 +25,16 @@ codes: [
       assignedAt: { type: Date, default: null },
       soldAt: { type: Date, default: null },
       commissionCfa: { type: Number, default: 0 },   // commission figée à l’activation élève
-      serial: { type: String, default: "" },         // identifiant imprimé (si tu veux séparer du code)
+       // ✅ N° de série optionnel (rempli automatiquement si manquant)
+  serial: {
+    type: String,
+    default: function () {
+      // fallback simple si non rempli au moment de la génération
+      return this.code ? `S-${this.code.slice(-8).toUpperCase()}` : "";
+    },
+    trim: true,
+  },
+
       activatedAt: { type: Date, default: null },    // date "activation commerciale" (status=activated)
   }
 ],

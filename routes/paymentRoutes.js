@@ -8,7 +8,7 @@ const { simulatePayment,  redeemCode , getAccessCodeStats, generateCodes, getAll
   getMyPartnerCodes,
   getMyPartnerStats,
   partnerMarkSold,
-
+nitaCreateAchatServer,
 
 } = require("../controllers/paymentController");
 const authMiddleware = require("../middlewares/authMiddleware");
@@ -19,6 +19,15 @@ router.all(
   express.urlencoded({ extended: true }),
   express.json(),
   nitaCallbackPublic
+);
+
+
+// + ajouter la route protégée
+router.post(
+  "/nita/create",
+  authMiddleware,
+  authorizeRoles("eleve","teacher"),
+  nitaCreateAchatServer
 );
 
 

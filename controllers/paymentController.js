@@ -1171,6 +1171,90 @@ const partnerMarkSold = async (req, res) => {
 
 
 
+// utilise tes ENV déjà en place
+const nitaCreateAchatServer = async (req, res) => {
+  try {
+    const { amount, label } = req.body || {};
+    const user = req.user;
+    if (!user) return res.status(401).json({ message: "Unauthenticated" });
+
+    const reqId = (String(label||'').toLowerCase().includes('mensuel') ? 'FAH-M-' : 'FAH-A-') + Date.now();
+
+    // 1) Auth NITA
+    const rAuth = await axios.post(
+      `${NITA_BASE_URL}/api/authenticate`,
+      { username: NITA_USERNAME, password: NITA_PASSWORD },
+      { headers: { "Content-Type":"application/json", "X-NT-API-KEY": NITA_API_KEY, Accept:"application/json" } }
+    );
+    const dAuth = rAuth.data || {};
+    const jwt = dAuth.token || dAuth.access_token || dAuth.jwt || dAuth?.data?.token;
+    if (!jwt) return res.status(500).json({ message: "Auth NITA failed" });
+
+    // helpers
+    const phoneToNita = (raw="")=>{
+      let s = String(raw).replace(/\s+/g,"");
+      if (s.startsWith("+")) s = "00"+s.slice(1);
+      if (s.startsWith("227")) s = "00"+s;
+      if (/^\d{8}$/.test(s)) s = "00227"+s;
+      return s;
+    };
+    const phoneForCallback = (raw="")=>{
+      let s = String(raw).replace(/\s+/g,"");
+      if (s.startsWith("+")) s = s.slice(1);
+      if (s.startsWith("00")) s = s.slice(2);
+      if (/^0\d{8}$/.test(s)) s = s.slice(1);
+      if (/^\d{8}$/.test(s)) s = "227"+s;
+      return s;
+    };
+
+    // URL publique de ton API (déjà déployée Heroku)
+    const PUBLIC_API_BASE = process.env.PUBLIC_API_BASE || "https://fahimtabackend-647bfe306335.herokuapp.com/api";
+    const urlCallback = `${PUBLIC_API_BASE}/payments/nita/callback?phone=${encodeURIComponent(phoneForCallback(user.phone))}&requestId=${encodeURIComponent(reqId)}`;
+
+    const payload = {
+      descriptionAchat: [label],
+      montantTransaction: amount,
+      motifTransaction: label,
+      requestId: reqId,
+      adresseIp: "102.45.67.89",
+      phoneClient: phoneToNita(user.phone),
+      urlCallback,
+    };
+
+    const rSave = await axios.post(
+      `${NITA_BASE_URL}/api/nitaServices/achatEnLigne/saveAchatEnLigne`,
+      payload,
+      { headers: { "Content-Type":"application/json", "X-NT-API-KEY": NITA_API_KEY, "Authorization": `Bearer ${jwt}`, Accept:"application/json" } }
+    );
+
+    const data = rSave.data || {};
+    if (Number(data?.code) !== 200) {
+      return res.status(400).json({ message: data?.message || "Erreur NITA" });
+    }
+
+    const reference =
+      data.referenceAchat || data.codeAchat || data.reference || data.ref ||
+      data?.data?.referenceAchat || data?.data?.codeAchat ||
+      data?.achat?.referenceAchat || data?.result?.referenceAchat || null;
+
+    if (!reference) return res.status(500).json({ message: "Référence introuvable." });
+
+    return res.json({ reference, reqId });
+  } catch (e) {
+    console.error("nitaCreateAchatServer error:", e?.response?.data || e?.message);
+    return res.status(500).json({ message: "Erreur serveur NITA." });
+  }
+};
+
+
+
+
+
+
+
+
+
+
 module.exports = { simulatePayment, getAccessCodeStats, activateBatch , redeemCode, generateCodes, getAllAccessCodes, getCodesByBatch, activateSubscription, nitaCallbackPublic, 
   checkNitaAndActivate ,
 
@@ -1179,4 +1263,5 @@ module.exports = { simulatePayment, getAccessCodeStats, activateBatch , redeemCo
   getMyPartnerCodes,
   getMyPartnerStats,
   partnerMarkSold,
+    nitaCreateAchatServer,
 };

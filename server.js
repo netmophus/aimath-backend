@@ -30,7 +30,7 @@ const allowedOrigins = [
 //  'http://localhost:3000',
 //  'http://127.0.0.1:3000',
 //  'http://192.168.0.100:3000',
-//  'http://192.168.1.221:3000',
+//  'http://192.168.80.241:3000',
  ];
 
 // ✅ Middleware CORS dynamique
@@ -137,6 +137,9 @@ app.use('/api/notifications', require('./routes/notificationsRoutes'));
 app.use("/api/message-notifications", require("./routes/messageNotificationRoutes"));
 
 
+
+const paymentReportRoutes = require("./routes/paymentReportRoutes");
+app.use("/api/payments", paymentReportRoutes);  
 
 
 // app.use('/api/profil', require("./routes/profilRoutes"));

@@ -2,12 +2,18 @@ const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const cors = require("cors");
-  const cron = require("node-cron");
+const http = require("http");
+const { Server } = require("socket.io");
+const cron = require("node-cron");
 const subscriptionReminderJob = require("./cron/subscriptionReminderJob");
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// ✅ Créer serveur HTTP pour Socket.io
+const server = http.createServer(app);
+
 const distributorRoutes = require("./routes/distributorRoutes");
 
 
@@ -31,6 +37,7 @@ const allowedOrigins = [
 //  'http://127.0.0.1:3000',
 //  'http://192.168.0.100:3000',
 //  'http://192.168.80.241:3000',
+//   'http://192.168.1.221:3000',
  ];
 
 // ✅ Middleware CORS dynamique
@@ -82,8 +89,17 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connecté"))
   .catch(err => console.error("❌ Erreur MongoDB :", err));
 
+// ✅ Initialiser Socket.io avec CORS
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
 
-
+// ✅ Gestion des connexions Socket.io
+require("./socket/socketHandler")(io);
 
 // 📆 Exécuter tous les jours à 8h du matin
 cron.schedule("0 8 * * *", () => {
@@ -136,7 +152,8 @@ app.use('/api/notifications', require('./routes/notificationsRoutes'));
 
 app.use("/api/message-notifications", require("./routes/messageNotificationRoutes"));
 
-
+// ✅ Routes demandes de contenu (élèves premium → admin)
+app.use("/api/content-requests", require("./routes/contentRequestRoutes"));
 
 const paymentReportRoutes = require("./routes/paymentReportRoutes");
 app.use("/api/payments", paymentReportRoutes);  
@@ -151,7 +168,8 @@ app.get("/", (req, res) => {
   res.send("🎓 API Maths IA opérationnelle");
 });
 
-// ✅ Démarrage serveur
-app.listen(PORT, '0.0.0.0', () => {
- console.log(`🚀 Serveur en ligne sur http://192.168.80.36:${PORT}`);
+// ✅ Démarrage serveur avec Socket.io
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Serveur en ligne sur http://192.168.80.36:${PORT}`);
+  console.log(`🔌 Socket.io activé pour temps réel`);
 });

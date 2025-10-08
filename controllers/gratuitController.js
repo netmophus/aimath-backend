@@ -541,6 +541,24 @@ const getBookById = async (req, res) => {
 
 
 
+// ✅ Livres filtrés par plusieurs levels (?in=6eme,5eme,terminale)
+const getBooksByLevels = async (req, res) => {
+  try {
+    const raw = String(req.query.in || "").trim(); // "6eme,5eme"
+    if (!raw) return res.status(400).json({ message: "Paramètre ?in requis." });
+
+    const levels = raw.split(",").map(s => s.trim()).filter(Boolean);
+    const regexes = levels.map(l => new RegExp(`^${l}$`, "i"));
+
+    const books = await Book.find({ level: { $in: regexes } }).sort({ createdAt: -1 });
+    res.json(books);
+  } catch (err) {
+    res.status(500).json({ message: "❌ Erreur lors du filtre par niveaux." });
+  }
+};
+
+
+
 module.exports = {
    callGeminiGratuit,
    callGTPTextGratuit,
@@ -551,6 +569,7 @@ module.exports = {
   getGratuitVideoUrl,
   getAllBooks,
   getBookById,
+  getBooksByLevels,
 
 
 };

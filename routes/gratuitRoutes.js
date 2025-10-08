@@ -13,6 +13,7 @@ const {
  getGratuitVideoUrl,
  getAllBooks,
  getBookById,
+ getBooksByLevels,
 
 } = require("../controllers/gratuitController");
 
@@ -24,6 +25,13 @@ router.post("/", authMiddleware, authorizeRoles("eleve", "teacher"), callGeminiG
 
 router.post("/gtp", authMiddleware, authorizeRoles("eleve", "teacher"), callGTPTextGratuit);
 
+// 📚 Livres par plusieurs levels: /ia/gratuit/levels?in=6eme,5eme,terminale
+router.get(
+  "/levels",
+  authMiddleware,
+  authorizeRoles("eleve", "teacher"),
+  getBooksByLevels
+);
 
 // ✅ LIVRES GRATUITS – élève uniquement
 router.get("/:id/view", authMiddleware, authorizeRoles("eleve", "teacher"), viewGratuitBook);

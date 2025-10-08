@@ -51,7 +51,22 @@ const DistributorSchema = new mongoose.Schema(
 
     // Disponibilité & métadonnées
     hasStock: { type: Boolean, default: true },
-    openingHours: { type: String, trim: true },               // (optionnel)
+    
+    // ✅ Heures d'ouverture - Supporte texte libre OU structure
+    openingHours: { 
+      type: mongoose.Schema.Types.Mixed,  // String OU Object
+      default: null,
+      /* Exemples valides:
+         - String: "Lun-Sam: 8h-18h"
+         - Object: {
+             monday: { open: "08:00", close: "18:00", closed: false },
+             tuesday: { open: "08:00", close: "18:00", closed: false },
+             ...
+             sunday: { closed: true }
+           }
+      */
+    },
+    
     notes: { type: String, trim: true },                      // (optionnel)
     lastUpdated: { type: Date, default: Date.now },
     isActive: { type: Boolean, default: true },
@@ -110,6 +125,35 @@ DistributorSchema.virtual("mapUrl").get(function () {
     return `https://www.google.com/maps/search/?api=1&query=${q}`;
   }
   return null;
+});
+
+/* ✅ Virtuals pour les heures d'ouverture */
+DistributorSchema.virtual("isOpenNow").get(function () {
+  if (!this.openingHours) return null;
+  if (typeof this.openingHours === "string") return null; // Pas de calcul pour texte libre
+  
+  const now = new Date();
+  const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const today = dayNames[now.getDay()];
+  const daySchedule = this.openingHours[today];
+  
+  if (!daySchedule || daySchedule.closed) return false;
+  
+  const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  return currentTime >= daySchedule.open && currentTime < daySchedule.close;
+});
+
+DistributorSchema.virtual("todaySchedule").get(function () {
+  if (!this.openingHours) return null;
+  if (typeof this.openingHours === "string") return this.openingHours;
+  
+  const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const today = dayNames[new Date().getDay()];
+  const daySchedule = this.openingHours[today];
+  
+  if (!daySchedule) return null;
+  if (daySchedule.closed) return "Fermé";
+  return `${daySchedule.open} - ${daySchedule.close}`;
 });
 
 /* ------------ Hooks ------------ */

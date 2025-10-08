@@ -8,6 +8,46 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+/* ✅ Validation des coordonnées GPS */
+const validateCoordinates = (lat, lng) => {
+  // Si les deux sont undefined, c'est OK (coordonnées optionnelles)
+  if (lat === undefined && lng === undefined) {
+    return { valid: true };
+  }
+
+  // Si un seul est fourni, c'est invalide
+  if ((lat !== undefined && lng === undefined) || (lat === undefined && lng !== undefined)) {
+    return { 
+      valid: false, 
+      message: "Vous devez fournir à la fois latitude ET longitude, ou aucune des deux." 
+    };
+  }
+
+  // Validation des plages
+  if (lat < -90 || lat > 90) {
+    return { 
+      valid: false, 
+      message: "La latitude doit être entre -90 et 90." 
+    };
+  }
+
+  if (lng < -180 || lng > 180) {
+    return { 
+      valid: false, 
+      message: "La longitude doit être entre -180 et 180." 
+    };
+  }
+
+  // ⚠️ Avertissement si hors Niger (mais on accepte quand même)
+  // Niger approximativement : lat 11-24, lng 0-16
+  const inNiger = lat >= 11 && lat <= 24 && lng >= 0 && lng <= 16;
+  
+  return { 
+    valid: true, 
+    warning: !inNiger ? "Attention : ces coordonnées semblent être hors du Niger." : null 
+  };
+};
+
 /* CREATE (admin) */
 exports.createDistributor = async (req, res) => {
   try {
@@ -27,6 +67,15 @@ exports.createDistributor = async (req, res) => {
       isActive,
     } = req.body;
 
+    const lat = toNum(latitude);
+    const lng = toNum(longitude);
+
+    // ✅ Validation des coordonnées GPS
+    const validation = validateCoordinates(lat, lng);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.message });
+    }
+
     const doc = new Distributor({
       name,
       contact,
@@ -41,14 +90,19 @@ exports.createDistributor = async (req, res) => {
       isActive: isActive !== false,
     });
 
-    const lat = toNum(latitude);
-    const lng = toNum(longitude);
     if (lat !== undefined && lng !== undefined) {
       doc.location = { type: "Point", coordinates: [lng, lat] };
     }
 
     await doc.save();
-    return res.status(201).json(doc);
+
+    // ✅ Retourner avec avertissement si coordonnées hors Niger
+    const response = { ...doc.toJSON() };
+    if (validation.warning) {
+      response.warning = validation.warning;
+    }
+
+    return res.status(201).json(response);
   } catch (err) {
     console.error("createDistributor error:", err);
     return res.status(500).json({ message: err.message || "Erreur serveur." });
@@ -142,15 +196,24 @@ exports.updateDistributor = async (req, res) => {
     if (notes !== undefined) doc.notes = notes;
     if (isActive !== undefined) doc.isActive = !!isActive;
 
-    // gestion géoloc : si les 2 fournis et valides → set ; si l’un est fourni mais pas l’autre → unset
+    // ✅ Gestion géoloc avec validation
     const lat = toNum(latitude);
     const lng = toNum(longitude);
     const latProvided = latitude !== undefined;
     const lngProvided = longitude !== undefined;
 
+    let geoWarning = null;
+
     if (latProvided || lngProvided) {
+      // ✅ Validation des coordonnées
+      const validation = validateCoordinates(lat, lng);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+      
       if (lat !== undefined && lng !== undefined) {
         doc.location = { type: "Point", coordinates: [lng, lat] };
+        geoWarning = validation.warning;
       } else {
         // on supprime si partiellement fourni / invalide
         doc.location = undefined;
@@ -158,7 +221,14 @@ exports.updateDistributor = async (req, res) => {
     }
 
     await doc.save();
-    return res.json(doc);
+
+    // ✅ Retourner avec avertissement si coordonnées hors Niger
+    const response = { ...doc.toJSON() };
+    if (geoWarning) {
+      response.warning = geoWarning;
+    }
+
+    return res.json(response);
   } catch (err) {
     console.error("updateDistributor error:", err);
     return res.status(500).json({ message: err.message || "Erreur serveur." });
@@ -184,13 +254,19 @@ exports.listNearbyDistributors = async (req, res) => {
     const lng = toNum(req.query.lng);
     const radiusKm = toNum(req.query.radiusKm) ?? 10;
 
+    // ✅ Ajout pagination
+    let { page = 1, pageSize = 10 } = req.query;
+    page = Math.max(parseInt(page, 10) || 1, 1);
+    pageSize = Math.min(Math.max(parseInt(pageSize, 10) || 10, 1), 100);
+
     if (lat === undefined || lng === undefined) {
       return res.status(400).json({ message: "Paramètres lat/lng requis." });
     }
 
     const meters = Math.max(100, Math.min(radiusKm * 1000, 200000)); // 100m → 200km
 
-    const data = await Distributor.aggregate([
+    // ✅ Pipeline avec pagination
+    const pipeline = [
       {
         $geoNear: {
           near: { type: "Point", coordinates: [lng, lat] },
@@ -201,10 +277,32 @@ exports.listNearbyDistributors = async (req, res) => {
         },
       },
       { $sort: { distanceMeters: 1 } },
-      { $limit: 100 },
-    ]);
+    ];
 
-    return res.json({ data, radiusMeters: meters });
+    // Compter le total avant pagination
+    const countPipeline = [...pipeline, { $count: "total" }];
+    const countResult = await Distributor.aggregate(countPipeline);
+    const total = countResult.length > 0 ? countResult[0].total : 0;
+
+    // Appliquer la pagination
+    const dataPipeline = [
+      ...pipeline,
+      { $skip: (page - 1) * pageSize },
+      { $limit: pageSize },
+    ];
+    const data = await Distributor.aggregate(dataPipeline);
+
+    // ✅ Retour avec structure cohérente (comme listDistributors)
+    return res.json({
+      data,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        pages: Math.ceil(total / pageSize),
+      },
+      radiusMeters: meters,
+    });
   } catch (err) {
     console.error("listNearbyDistributors error:", err);
     return res.status(500).json({ message: "Erreur serveur." });

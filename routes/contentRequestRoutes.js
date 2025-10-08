@@ -22,3 +22,4 @@ router.patch("/:id", authMiddleware, authorizeRoles("admin"), updateContentReque
 router.delete("/:id", authMiddleware, authorizeRoles("admin"), deleteContentRequest);
 
 module.exports = router;
+

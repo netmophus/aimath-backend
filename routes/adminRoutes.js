@@ -1,6 +1,15 @@
 const express = require("express");
 const router = express.Router();
-const { createAdmin, createRechargeCode, getAllUsers, toggleUserStatus, getAdminStats } = require("../controllers/adminController");
+const { 
+  createAdmin, 
+  createRechargeCode, 
+  getAllUsers, 
+  toggleUserStatus, 
+  getAdminStats,
+  exportUsersCSV, // ✅ Nouveau
+  bulkActionUsers, // ✅ Nouveau
+  getUserDetails, // ✅ Nouveau
+} = require("../controllers/adminController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const { authorizeRoles } = require("../middlewares/roleMiddleware");
 const User = require("../models/userModel");
@@ -36,6 +45,16 @@ router.put("/users/:id/toggle",
   toggleUserStatus); 
 
 router.get("/stats", authMiddleware, authorizeRoles("admin"), getAdminStats);
+
+// ✅ NOUVEAUX ENDPOINTS
+// Export CSV des utilisateurs
+router.get("/users/export", authMiddleware, authorizeRoles("admin"), exportUsersCSV);
+
+// Actions groupées (activation/désactivation multiple)
+router.post("/users/bulk-action", authMiddleware, authorizeRoles("admin"), bulkActionUsers);
+
+// Détails complets d'un utilisateur
+router.get("/users/:id/details", authMiddleware, authorizeRoles("admin"), getUserDetails);
 
 
 // POST /api/admin/partners

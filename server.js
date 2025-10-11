@@ -155,6 +155,9 @@ app.use("/api/message-notifications", require("./routes/messageNotificationRoute
 // ✅ Routes demandes de contenu (élèves premium → admin)
 app.use("/api/content-requests", require("./routes/contentRequestRoutes"));
 
+// ✅ Route Tutorials (Vidéos tutorielles)
+app.use("/api/tutorials", require("./routes/tutorialRoutes"));
+
 const paymentReportRoutes = require("./routes/paymentReportRoutes");
 app.use("/api/payments", paymentReportRoutes);  
 

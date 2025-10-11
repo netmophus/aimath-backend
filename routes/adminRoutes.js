@@ -9,6 +9,9 @@ const {
   exportUsersCSV, // ✅ Nouveau
   bulkActionUsers, // ✅ Nouveau
   getUserDetails, // ✅ Nouveau
+  sendSMSToUser, // ✅ SMS individuel
+  sendBulkSMS, // ✅ SMS groupé
+  sendMarketingSMS, // ✅ SMS marketing
 } = require("../controllers/adminController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const { authorizeRoles } = require("../middlewares/roleMiddleware");
@@ -55,6 +58,15 @@ router.post("/users/bulk-action", authMiddleware, authorizeRoles("admin"), bulkA
 
 // Détails complets d'un utilisateur
 router.get("/users/:id/details", authMiddleware, authorizeRoles("admin"), getUserDetails);
+
+// 📱 Envoyer un SMS à un utilisateur
+router.post("/users/:userId/send-sms", authMiddleware, authorizeRoles("admin"), sendSMSToUser);
+
+// 📱 Envoyer un SMS groupé
+router.post("/users/send-bulk-sms", authMiddleware, authorizeRoles("admin"), sendBulkSMS);
+
+// 📢 Envoyer un SMS marketing à tous les utilisateurs
+router.post("/users/send-marketing-sms", authMiddleware, authorizeRoles("admin"), sendMarketingSMS);
 
 
 // POST /api/admin/partners

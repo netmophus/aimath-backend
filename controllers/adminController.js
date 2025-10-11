@@ -1,5 +1,6 @@
 const User = require("../models/userModel");
 const RechargeCode = require("../models/rechargeCodeModel");
+const { sendSMS } = require("../utils/sendSMS");
 
 
 
@@ -278,6 +279,159 @@ const getUserDetails = async (req, res) => {
   }
 };
 
+// 📱 Envoyer un SMS à un utilisateur
+const sendSMSToUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { message } = req.body;
+
+    if (!message || message.trim() === "") {
+      return res.status(400).json({ message: "Le message ne peut pas être vide." });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé." });
+    }
+
+    if (!user.phone) {
+      return res.status(400).json({ message: "Cet utilisateur n'a pas de numéro de téléphone." });
+    }
+
+    const result = await sendSMS(user.phone, message);
+
+    if (result.success) {
+      res.status(200).json({ 
+        message: "✅ SMS envoyé avec succès!", 
+        phone: user.phone,
+        userName: user.fullName || user.phone
+      });
+    } else {
+      res.status(500).json({ message: "❌ Échec de l'envoi du SMS." });
+    }
+  } catch (err) {
+    console.error("Erreur envoi SMS :", err);
+    res.status(500).json({ message: "Erreur serveur lors de l'envoi du SMS." });
+  }
+};
+
+// 📱 Envoyer un SMS groupé
+const sendBulkSMS = async (req, res) => {
+  try {
+    const { userIds, message } = req.body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ message: "Liste d'utilisateurs vide." });
+    }
+
+    if (!message || message.trim() === "") {
+      return res.status(400).json({ message: "Le message ne peut pas être vide." });
+    }
+
+    const users = await User.find({ _id: { $in: userIds } }).select("phone fullName");
+    const usersWithPhone = users.filter(u => u.phone);
+
+    if (usersWithPhone.length === 0) {
+      return res.status(400).json({ message: "Aucun utilisateur avec un numéro de téléphone." });
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const user of usersWithPhone) {
+      const result = await sendSMS(user.phone, message);
+      if (result.success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+    }
+
+    res.status(200).json({ 
+      message: `✅ SMS envoyés: ${successCount} réussis, ${failCount} échoués`,
+      successCount,
+      failCount,
+      total: usersWithPhone.length
+    });
+  } catch (err) {
+    console.error("Erreur envoi SMS groupé :", err);
+    res.status(500).json({ message: "Erreur serveur lors de l'envoi des SMS." });
+  }
+};
+
+// 📢 Envoyer un SMS marketing à tous les utilisateurs (avec filtres optionnels)
+const sendMarketingSMS = async (req, res) => {
+  try {
+    const { message, filters } = req.body;
+
+    if (!message || message.trim() === "") {
+      return res.status(400).json({ message: "Le message ne peut pas être vide." });
+    }
+
+    // Construction de la query avec les filtres
+    const query = {};
+
+    if (filters) {
+      // Filtre par rôle
+      if (filters.role) {
+        query.role = filters.role;
+      }
+
+      // Filtre par statut actif/inactif
+      if (filters.status === "active") {
+        query.isActive = true;
+      } else if (filters.status === "inactive") {
+        query.isActive = false;
+      }
+
+      // Filtre par abonnement
+      if (filters.subscription === "subscribed") {
+        query.isSubscribed = true;
+      } else if (filters.subscription === "not-subscribed") {
+        query.isSubscribed = false;
+      }
+    }
+
+    // Récupérer tous les utilisateurs correspondants avec un numéro de téléphone
+    const users = await User.find({ ...query, phone: { $exists: true, $ne: "" } })
+      .select("phone fullName");
+
+    if (users.length === 0) {
+      return res.status(400).json({ message: "Aucun utilisateur avec un numéro de téléphone trouvé." });
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+
+    // Envoi des SMS avec un petit délai pour éviter de surcharger l'API
+    for (const user of users) {
+      try {
+        const result = await sendSMS(user.phone, message);
+        if (result.success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+        // Petit délai entre chaque envoi (100ms)
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (err) {
+        console.error(`Erreur SMS pour ${user.phone}:`, err);
+        failCount++;
+      }
+    }
+
+    res.status(200).json({ 
+      message: `📢 Campagne SMS terminée: ${successCount} réussis, ${failCount} échoués sur ${users.length} destinataires`,
+      successCount,
+      failCount,
+      total: users.length
+    });
+  } catch (err) {
+    console.error("Erreur envoi SMS marketing :", err);
+    res.status(500).json({ message: "Erreur serveur lors de l'envoi de la campagne SMS." });
+  }
+};
+
 module.exports = { 
   createAdmin, 
   createRechargeCode, 
@@ -287,5 +441,8 @@ module.exports = {
   exportUsersCSV, // ✅ Nouveau
   bulkActionUsers, // ✅ Nouveau
   getUserDetails, // ✅ Nouveau
+  sendSMSToUser, // ✅ Envoi SMS individuel
+  sendBulkSMS, // ✅ Envoi SMS groupé
+  sendMarketingSMS, // ✅ Envoi SMS marketing à tous
 };
 

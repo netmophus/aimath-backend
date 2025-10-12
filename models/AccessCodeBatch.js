@@ -11,7 +11,7 @@ codes: [
     code: { type: String, required: true },
     status: {
       type: String,
-      enum: ["generated", "activated", "used"],
+      enum: ["generated", "assigned", "sold", "activated", "used"],
       default: "generated"
     },
     used: { type: Boolean, default: false },

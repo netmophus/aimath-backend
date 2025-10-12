@@ -1076,22 +1076,29 @@ const assignCodesToPartner = async (req, res) => {
 const getMyPartnerCodes = async (req, res) => {
   try {
     const partnerId = req.user._id;
-    const status = String(req.query.status || "all").toLowerCase();
+    const status = String(req.query.status || "activated").toLowerCase();
 
-    const matchStatus = status !== "all" ? { "codes.status": status } : {};
+    let matchStatus = {};
+    if (status === "available") {
+      // Disponibles = activées mais pas vendues ni utilisées
+      matchStatus = { 
+        "codes.status": "activated"
+      };
+    } else if (status !== "all") {
+      matchStatus = { "codes.status": status };
+    }
 
     const items = await AccessCodeBatch.aggregate([
       { $match: { "codes.partner": partnerId } },
       { $unwind: "$codes" },
       { $match: { "codes.partner": partnerId, ...matchStatus } },
       {
-        // on expose le code sous le nom codeRaw pour le masquer ensuite côté Node
         $project: {
-          _id: 0,
+          _id: "$codes._id",
           batchId: "$batchId",
           type: "$type",
           faceValueCfa: { $ifNull: ["$codes.price", "$price"] },
-          codeRaw: "$codes.code",        // <-- code en clair (temporaire)
+          codeRaw: "$codes.code",
           status: "$codes.status",
           assignedAt: "$codes.assignedAt",
           activatedAt: "$codes.activatedAt",
@@ -1103,9 +1110,10 @@ const getMyPartnerCodes = async (req, res) => {
       { $sort: { assignedAt: -1, activatedAt: -1, soldAt: -1, usedAt: -1 } }
     ]);
 
-    // masque + supprime le code en clair
+    // masque mais garde le code et l'_id
     const secured = items.map(i => ({
       ...i,
+      code: i.codeRaw,
       codeMasked: maskCode(i.codeRaw || "")
     })).map(i => { delete i.codeRaw; return i; });
 

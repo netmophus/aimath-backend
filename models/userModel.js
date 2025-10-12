@@ -45,6 +45,20 @@ const userSchema = new mongoose.Schema(
 
      // 👇 NEW: optionnel, pas de default → ne casse rien
   firstLoginAt: { type: Date, default: null },
+  
+  // Cartes achetées par l'utilisateur
+  cards: [{
+    code: { type: String, required: true },
+    price: { type: Number, required: true },
+    status: { type: String, enum: ["en_attente", "utilisé", "annulé"], default: "en_attente" },
+    serialNumber: { type: String },
+    batchId: { type: String },
+    purchaseDate: { type: Date, default: Date.now },
+    partnerName: { type: String },
+    partnerPhone: { type: String },
+    saleId: { type: String },
+    createdAt: { type: Date, default: Date.now }
+  }],
   },
   { timestamps: true }
 );

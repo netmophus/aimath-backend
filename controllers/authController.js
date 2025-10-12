@@ -393,10 +393,15 @@ const getMe = async (req, res) => {
     photo: user.photo,
     schoolName: user.schoolName,
     city: user.city,
+    companyName: user.companyName,
+    region: user.region,
+    commissionDefaultCfa: user.commissionDefaultCfa,
     isVerified: user.isVerified,
     isSubscribed, // ← calculé ici
     subscriptionStart: user.subscriptionStart,
     subscriptionEnd: user.subscriptionEnd,
+    createdAt: user.createdAt,
+    lastLoginAt: user.lastLoginAt,
     ...(studentProfile && {
       level: studentProfile.level,
       classe: studentProfile.classe,

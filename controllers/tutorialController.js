@@ -70,20 +70,21 @@ const getTutorialById = async (req, res) => {
 // ➕ Créer un nouveau tutoriel
 const createTutorial = async (req, res) => {
   try {
-    const { title, description, youtubeId, icon, color, order, isActive } = req.body;
+    const { title, description, videoUrl, videoType, icon, color, order, isActive } = req.body;
 
     // Validation
-    if (!title || !description || !youtubeId) {
+    if (!title || !description || !videoUrl) {
       return res.status(400).json({
         success: false,
-        message: "Titre, description et ID YouTube sont requis",
+        message: "Titre, description et URL de la vidéo sont requis",
       });
     }
 
     const tutorial = await Tutorial.create({
       title,
       description,
-      youtubeId,
+      videoUrl,
+      videoType: videoType || "direct",
       icon: icon || "HelpOutline",
       color: color || "#2196F3",
       order: order || 0,
@@ -108,7 +109,7 @@ const createTutorial = async (req, res) => {
 // ✏️ Mettre à jour un tutoriel
 const updateTutorial = async (req, res) => {
   try {
-    const { title, description, youtubeId, icon, color, order, isActive } = req.body;
+    const { title, description, videoUrl, videoType, icon, color, order, isActive } = req.body;
 
     const tutorial = await Tutorial.findById(req.params.id);
 
@@ -122,7 +123,8 @@ const updateTutorial = async (req, res) => {
     // Mise à jour des champs
     if (title !== undefined) tutorial.title = title;
     if (description !== undefined) tutorial.description = description;
-    if (youtubeId !== undefined) tutorial.youtubeId = youtubeId;
+    if (videoUrl !== undefined) tutorial.videoUrl = videoUrl;
+    if (videoType !== undefined) tutorial.videoType = videoType;
     if (icon !== undefined) tutorial.icon = icon;
     if (color !== undefined) tutorial.color = color;
     if (order !== undefined) tutorial.order = order;

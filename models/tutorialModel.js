@@ -12,10 +12,16 @@ const tutorialSchema = new mongoose.Schema(
       required: [true, "La description est requise"],
       trim: true,
     },
-    youtubeId: {
+    videoUrl: {
       type: String,
-      required: [true, "L'ID YouTube est requis"],
+      required: [true, "L'URL de la vidéo est requise"],
       trim: true,
+    },
+    videoType: {
+      type: String,
+      enum: ["vimeo"],
+      default: "vimeo",
+      required: true,
     },
     icon: {
       type: String,

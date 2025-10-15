@@ -7,17 +7,36 @@ const Notification = require('../models/Notification'); // adapte le chemin si b
 
 exports.createExam = async (req, res) => {
   try {
-    const { title, level, description, badge } = req.body;
+    const { title, level, description, badge, coverSupabaseUrl, subjectSupabaseUrl, correctionSupabaseUrl } = req.body;
 
     // ✅ Vérification des champs obligatoires
     if (!title || !level || !description || !badge) {
       return res.status(400).json({ message: "Tous les champs sont requis." });
     }
 
-    // ✅ Accès aux URLs Cloudinary
-    const subjectUrl = req.files?.subject?.[0]?.path;
-    const correctionUrl = req.files?.correction?.[0]?.path || null;
-    const coverImage = req.files?.cover?.[0]?.path || null;
+    // ✅ Gestion de l'image : soit upload Cloudinary, soit lien Supabase
+    let coverImage;
+    if (req.files?.cover?.[0]?.path) {
+      coverImage = req.files.cover[0].path; // Upload Cloudinary
+    } else if (coverSupabaseUrl) {
+      coverImage = coverSupabaseUrl; // Lien Supabase
+    }
+
+    // ✅ Gestion du sujet : soit upload Cloudinary, soit lien Supabase
+    let subjectUrl;
+    if (req.files?.subject?.[0]?.path) {
+      subjectUrl = req.files.subject[0].path; // Upload Cloudinary
+    } else if (subjectSupabaseUrl) {
+      subjectUrl = subjectSupabaseUrl; // Lien Supabase
+    }
+
+    // ✅ Gestion de la correction : soit upload Cloudinary, soit lien Supabase
+    let correctionUrl;
+    if (req.files?.correction?.[0]?.path) {
+      correctionUrl = req.files.correction[0].path; // Upload Cloudinary
+    } else if (correctionSupabaseUrl) {
+      correctionUrl = correctionSupabaseUrl; // Lien Supabase
+    }
 
     if (!subjectUrl) {
       return res.status(400).json({ message: "Le fichier du sujet est obligatoire." });
@@ -40,9 +59,8 @@ exports.createExam = async (req, res) => {
     await Notification.create({
       title: `📝 Nouvel examen ajouté : ${title}`,
       type: 'content',
-      linkTo: 'ExamList', // Ce nom doit correspondre au nom de l'écran dans ton navigateur
+      linkTo: 'ExamList',
     });
-
 
     res.status(201).json({
       message: "✅ Sujet d'examen ajouté avec succès.",

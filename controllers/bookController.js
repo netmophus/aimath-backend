@@ -42,14 +42,27 @@ const Notification = require('../models/Notification'); // modèle Mongoose
 
 const createBook = async (req, res) => {
   try {
-    const { title, author, description, level, badge, fileUrl } = req.body;
+    const { title, author, description, level, badge, imageSupabaseUrl, bookSupabaseUrl } = req.body;
 
+    // ✅ Gestion de l'image : soit upload Cloudinary, soit lien Supabase
+    let coverImage;
+    if (req.files?.cover?.[0]?.path) {
+      coverImage = req.files.cover[0].path; // Upload Cloudinary
+    } else if (imageSupabaseUrl) {
+      coverImage = imageSupabaseUrl; // Lien Supabase
+    }
 
-    const coverImage = req.files?.cover?.[0]?.path;
+    // ✅ Gestion du fichier : soit upload Cloudinary, soit lien Supabase
+    let fileUrl;
+    if (req.files?.pdf?.[0]?.path) {
+      fileUrl = req.files.pdf[0].path; // Upload Cloudinary
+    } else if (bookSupabaseUrl) {
+      fileUrl = bookSupabaseUrl; // Lien Supabase
+    }
 
     // 🧾 Vérification
     if (!coverImage || !fileUrl) {
-      return res.status(400).json({ message: "La couverture et le lien du PDF sont requis." });
+      return res.status(400).json({ message: "La couverture et le fichier PDF sont requis." });
     }
 
     const book = await Book.create({
@@ -59,19 +72,16 @@ const createBook = async (req, res) => {
       level,
       badge,
       coverImage,
-      fileUrl, // ✅ tu prends directement le lien depuis le body
+      fileUrl,
     });
 
-
-      await Notification.create({
+    await Notification.create({
       userId: null, // notification globale
       title: `📘 Nouveau livre ajouté : ${book.title}`,
       type: 'content',
       linkTo: 'BookList',
       isReadBy: [],
     });
-
-
 
     res.status(201).json(book);
   } catch (err) {
@@ -89,18 +99,20 @@ const updateBook = async (req, res) => {
     const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ message: "📘 Livre non trouvé." });
 
-    const { title, author, description, level, badge } = req.body;
+    const { title, author, description, level, badge, imageSupabaseUrl, bookSupabaseUrl } = req.body;
 
-    // upload cover si fournie
+    // ✅ Mise à jour de l'image : soit upload Cloudinary, soit lien Supabase
     if (req.files?.cover?.[0]?.path) {
-      const newCover = await uploadToCloudinary(req.files.cover[0].path, "books/covers", "image");
-      book.coverImage = newCover;
+      book.coverImage = req.files.cover[0].path; // Upload Cloudinary
+    } else if (imageSupabaseUrl) {
+      book.coverImage = imageSupabaseUrl; // Lien Supabase
     }
 
-    // upload pdf si fourni
+    // ✅ Mise à jour du fichier : soit upload Cloudinary, soit lien Supabase
     if (req.files?.pdf?.[0]?.path) {
-      const newPdf = await uploadToCloudinary(req.files.pdf[0].path, "books/pdfs", "raw");
-      book.fileUrl = newPdf;
+      book.fileUrl = req.files.pdf[0].path; // Upload Cloudinary
+    } else if (bookSupabaseUrl) {
+      book.fileUrl = bookSupabaseUrl; // Lien Supabase
     }
 
     book.title = title || book.title;
@@ -113,6 +125,7 @@ const updateBook = async (req, res) => {
 
     res.json(book);
   } catch (err) {
+    console.error("Erreur mise à jour livre :", err.message);
     res.status(500).json({ message: "❌ Erreur lors de la mise à jour." });
   }
 };

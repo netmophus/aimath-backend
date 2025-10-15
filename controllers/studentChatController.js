@@ -191,26 +191,45 @@ const uploadChatFile = async (req, res) => {
       return res.status(403).json({ message: "Vous n'avez pas de session active avec cet enseignant." });
     }
 
+    console.log("📎 Fichier reçu (étudiant) :", {
+      name: req.file?.originalname,
+      mimetype: req.file?.mimetype,
+      size: req.file?.size,
+      url: req.file?.secure_url
+    });
+
     // 📁 Détection du type de fichier
     let fileType = "";
     const mime = req.file.mimetype;
 
-    if (mime.startsWith("image")) fileType = "image";
-    else if (mime === "application/pdf") fileType = "pdf";
-    else if (mime.startsWith("video")) fileType = "video";
-    else if (
-  mime.startsWith("audio") ||
-  mime === "audio/webm" ||
-  mime === "audio/m4a" ||
-  mime === "audio/mp4" ||
-  mime === "audio/x-m4a"
-) fileType = "audio";
+    console.log("🔍 Détection du type de fichier (étudiant) :", { mimetype: mime });
 
-    else return res.status(400).json({ message: "Type de fichier non supporté." });
+    if (mime.startsWith("image")) {
+      fileType = "image";
+      console.log("✅ Type détecté : IMAGE");
+    } else if (mime === "application/pdf") {
+      fileType = "pdf";
+      console.log("✅ Type détecté : PDF");
+    } else if (mime.startsWith("video")) {
+      fileType = "video";
+      console.log("✅ Type détecté : VIDEO");
+    } else if (
+      mime.startsWith("audio") ||
+      mime === "audio/webm" ||
+      mime === "audio/m4a" ||
+      mime === "audio/mp4" ||
+      mime === "audio/x-m4a"
+    ) {
+      fileType = "audio";
+      console.log("✅ Type détecté : AUDIO");
+    } else {
+      console.log("❌ Type non supporté :", mime);
+      return res.status(400).json({ message: "Type de fichier non supporté." });
+    }
 
-    const fileUrl = req.file?.url || req.file?.path;
+    const fileUrl = req.file?.secure_url || req.file?.path;
     if (!fileUrl) {
-      return res.status(500).json({ message: "L’URL du fichier est manquante." });
+      return res.status(500).json({ message: "L'URL du fichier est manquante." });
     }
 
     // 📩 Création du message avec fichier
@@ -223,10 +242,38 @@ const uploadChatFile = async (req, res) => {
       isVoiceMessage: fileType === "audio",
     });
 
+    console.log("💾 Message créé (étudiant) :", {
+      _id: newMessage._id,
+      fileType: newMessage.fileType,
+      fileUrl: newMessage.fileUrl,
+      from: newMessage.from,
+      to: newMessage.to
+    });
+
+    // ✅ Populate les infos de l'expéditeur et du destinataire
+    await newMessage.populate("from", "_id fullName photo");
+    await newMessage.populate("to", "_id fullName photo");
+
+    console.log("📤 Message final envoyé (étudiant) :", {
+      _id: newMessage._id,
+      fileType: newMessage.fileType,
+      fileUrl: newMessage.fileUrl,
+      from: newMessage.from?.fullName,
+      to: newMessage.to?.fullName
+    });
+
+    // ✅ Création de la notification pour l'enseignant
+    await MessageNotification.create({
+      user: to, // 👈 enseignant destinataire
+      from: senderId, // 👈 élève expéditeur
+      messageId: newMessage._id,
+      messageSnippet: fileType === "image" ? "📷 Image" : fileType === "audio" ? "🎤 Message vocal" : `📎 ${fileType}`,
+    });
+
     res.status(201).json(newMessage);
   } catch (err) {
     console.error("❌ Erreur uploadChatFile (élève) :", err.message);
-    res.status(500).json({ message: "Erreur serveur lors de l’envoi du fichier." });
+    res.status(500).json({ message: "Erreur serveur lors de l'envoi du fichier." });
   }
 };
 

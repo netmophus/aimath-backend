@@ -33,6 +33,7 @@ const MessageNotification = require("../models/MessageNotification"); // ✅ à 
 const getAvailableStudents = async (req, res) => {
   try {
     const teacherId = req.user._id;
+    console.log("🔍 Chargement des élèves pour enseignant :", teacherId);
 
     const activeRequests = await SupportRequest.find({
       teacher: teacherId,
@@ -40,11 +41,24 @@ const getAvailableStudents = async (req, res) => {
       sessionStarted: true,
     }).populate("student", "_id fullName phone schoolName city photo");
 
+    console.log("📋 Requêtes actives trouvées :", activeRequests.length);
+
     // Pour chaque élève, récupérer aussi son StudentProfile
     const students = await Promise.all(
       activeRequests.map(async (request) => {
+        if (!request.student) {
+          console.warn("⚠️ Student null dans request:", request._id);
+          return null;
+        }
+
         const student = request.student;
-        const profile = await StudentProfile.findOne({ user: student._id });
+        let profile = null;
+        
+        try {
+          profile = await StudentProfile.findOne({ user: student._id });
+        } catch (profileErr) {
+          console.warn("⚠️ Erreur récupération profil pour", student._id, profileErr.message);
+        }
 
         return {
           ...student.toObject(),
@@ -53,10 +67,14 @@ const getAvailableStudents = async (req, res) => {
       })
     );
 
-    res.json(students);
+    // Filtrer les valeurs null
+    const validStudents = students.filter(s => s !== null);
+    console.log("✅ Élèves valides retournés :", validStudents.length);
+
+    res.json(validStudents);
   } catch (err) {
-    console.error("Erreur chargement élèves :", err);
-    res.status(500).json({ message: "Erreur lors du chargement des élèves." });
+    console.error("❌ Erreur chargement élèves :", err);
+    res.status(500).json({ message: "Erreur lors du chargement des élèves.", error: err.message });
   }
 };
 
@@ -221,26 +239,38 @@ const uploadChatFile = async (req, res) => {
       return res.status(400).json({ message: "Aucun fichier reçu." });
     }
 
-    console.log("📎 Fichier reçu :", req.file); // ➕ Ajout de log utile
+    console.log("📎 Fichier reçu :", {
+      name: req.file?.originalname,
+      mimetype: req.file?.mimetype,
+      size: req.file?.size,
+      url: req.file?.secure_url
+    });
 
     let fileType = "";
     const mime = req.file.mimetype;
 
+    console.log("🔍 Détection du type de fichier :", { mimetype: mime });
+
     if (mime.startsWith("image")) {
       fileType = "image";
+      console.log("✅ Type détecté : IMAGE");
     } else if (mime === "application/pdf") {
       fileType = "pdf";
+      console.log("✅ Type détecté : PDF");
     } else if (mime.startsWith("video")) {
       fileType = "video";
+      console.log("✅ Type détecté : VIDEO");
     } else if (mime.startsWith("audio")) {
       fileType = "audio";
+      console.log("✅ Type détecté : AUDIO");
     } else {
+      console.log("❌ Type non supporté :", mime);
       return res.status(400).json({ message: "Type de fichier non supporté." });
     }
 
     const fileUrl = req.file?.secure_url || req.file?.path;
     if (!fileUrl) {
-      return res.status(500).json({ message: "L’URL du fichier est manquante." });
+      return res.status(500).json({ message: "L'URL du fichier est manquante." });
     }
 
     const newMessage = await Message.create({
@@ -252,10 +282,38 @@ const uploadChatFile = async (req, res) => {
       isVoiceMessage: fileType === "audio",
     });
 
+    console.log("💾 Message créé :", {
+      _id: newMessage._id,
+      fileType: newMessage.fileType,
+      fileUrl: newMessage.fileUrl,
+      from: newMessage.from,
+      to: newMessage.to
+    });
+
+    // ✅ Populate les infos de l'expéditeur et du destinataire
+    await newMessage.populate("from", "_id fullName photo");
+    await newMessage.populate("to", "_id fullName photo");
+
+    console.log("📤 Message final envoyé :", {
+      _id: newMessage._id,
+      fileType: newMessage.fileType,
+      fileUrl: newMessage.fileUrl,
+      from: newMessage.from?.fullName,
+      to: newMessage.to?.fullName
+    });
+
+    // ✅ Création de la notification pour l'élève
+    await MessageNotification.create({
+      user: to, // 👈 élève destinataire
+      from: senderId,
+      messageId: newMessage._id,
+      messageSnippet: fileType === "image" ? "📷 Image" : fileType === "audio" ? "🎤 Message vocal" : `📎 ${fileType}`,
+    });
+
     res.status(201).json(newMessage);
   } catch (err) {
     console.error("Erreur uploadChatFile :", err);
-    res.status(500).json({ message: "Erreur serveur lors de l’envoi du fichier." });
+    res.status(500).json({ message: "Erreur serveur lors de l'envoi du fichier." });
   }
 };
 

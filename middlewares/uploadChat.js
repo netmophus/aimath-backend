@@ -10,15 +10,24 @@ const chatStorage = new CloudinaryStorage({
   params: async (req, file) => {
     const folder = "chat/files";
 
-    // Déterminer le type de ressource
- 
-let resource_type = "auto";
+    // ✅ Déterminer le type de ressource selon le mimetype
+    let resource_type = "auto";
+    
+    if (file.mimetype.startsWith("image")) {
+      resource_type = "image"; // ✅ Images = image
+    } else if (file.mimetype.startsWith("video")) {
+      resource_type = "video"; // ✅ Vidéos = video
+    } else if (file.mimetype.startsWith("audio") || file.mimetype === "audio/webm") {
+      resource_type = "video"; // ✅ Audio = video (convention Cloudinary)
+    } else if (file.mimetype === "application/pdf") {
+      resource_type = "raw"; // ✅ PDF = raw
+    }
 
-if (file.mimetype.startsWith("audio")) {
-  resource_type = "video"; // ✅ Cloudinary gère les audios comme des vidéos
-}
-
- console.log("📁 Fichier reçu dans uploadChat :", file);
+    console.log("📁 Fichier reçu dans uploadChat :", {
+      name: file.originalname,
+      mimetype: file.mimetype,
+      resource_type: resource_type,
+    });
  
     return {
       folder,
@@ -26,9 +35,7 @@ if (file.mimetype.startsWith("audio")) {
       public_id: `${Date.now()}-${file.originalname}`,
       use_filename: true,
       unique_filename: false,
-      allowed_formats: ["jpg", "jpeg", "png", "pdf", "mp3", "mp4", "webm", "ogg", "m4a"]
-
-
+      allowed_formats: ["jpg", "jpeg", "png", "pdf", "mp3", "mp4", "webm", "ogg", "m4a"],
     };
   },
 });

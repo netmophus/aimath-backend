@@ -263,7 +263,8 @@ exports.listNearbyDistributors = async (req, res) => {
       return res.status(400).json({ message: "Paramètres lat/lng requis." });
     }
 
-    const meters = Math.max(100, Math.min(radiusKm * 1000, 200000)); // 100m → 200km
+    // ✅ Accepter les rayons de 0m à 200km (pas de minimum à 100m)
+    const meters = Math.max(0, Math.min(radiusKm * 1000, 200000)); // 0m → 200km
 
     // ✅ Pipeline avec pagination
     const pipeline = [

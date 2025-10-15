@@ -7,7 +7,7 @@ const Notification = require('../models/Notification'); // adapte le chemin si b
 
 exports.createExam = async (req, res) => {
   try {
-    const { title, level, description, badge, coverSupabaseUrl, subjectSupabaseUrl, correctionSupabaseUrl } = req.body;
+    const { title, level, subject, description, badge, coverSupabaseUrl, subjectSupabaseUrl, correctionSupabaseUrl } = req.body;
 
     // ✅ Vérification des champs obligatoires
     if (!title || !level || !description || !badge) {
@@ -46,6 +46,7 @@ exports.createExam = async (req, res) => {
     const newExam = new Exam({
       title,
       level,
+      subject: subject || "maths",
       description,
       badge,
       subjectUrl,
@@ -86,9 +87,9 @@ exports.getAllExams = async (req, res) => {
 
 exports.updateExam = async (req, res) => {
   try {
-    const { title, level, description, badge } = req.body;
+    const { title, level, subject, description, badge } = req.body;
 
-    const updateData = { title, level, description, badge };
+    const updateData = { title, level, subject, description, badge };
 
     if (req.files?.pdf?.[0]?.path) updateData.fileUrl = req.files.pdf[0].path;
     if (req.files?.cover?.[0]?.path) updateData.coverImage = req.files.cover[0].path;

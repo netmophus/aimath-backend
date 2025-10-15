@@ -6,6 +6,11 @@ const videoSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true },
     level: { type: String, required: true },
+    subject: {
+      type: String,
+      enum: ["maths", "physique", "chimie", "svt"],
+      default: "maths",
+    },
     badge: {
       type: String,
       enum: ["gratuit", "prenuim"],

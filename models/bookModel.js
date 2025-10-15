@@ -24,6 +24,11 @@ const bookSchema = new mongoose.Schema(
       type: String,
       required: true, // Exemple : "6eme", "terminale", "universite"
     },
+    subject: {
+      type: String,
+      enum: ["maths", "physique", "chimie", "svt"],
+      default: "maths",
+    },
     badge: {
       type: String,
       enum: ["gratuit", "prenuim"],

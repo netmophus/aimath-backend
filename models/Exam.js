@@ -11,6 +11,11 @@ const examSchema = new mongoose.Schema(
       type: String,
       required: true, // Exemple : "3eme", "terminale", etc.
     },
+    subject: {
+      type: String,
+      enum: ["maths", "physique", "chimie", "svt"],
+      default: "maths",
+    },
     description: {
       type: String,
       required: true,

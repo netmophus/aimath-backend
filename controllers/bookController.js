@@ -42,7 +42,7 @@ const Notification = require('../models/Notification'); // modèle Mongoose
 
 const createBook = async (req, res) => {
   try {
-    const { title, author, description, level, badge, imageSupabaseUrl, bookSupabaseUrl } = req.body;
+    const { title, author, description, level, subject, badge, imageSupabaseUrl, bookSupabaseUrl } = req.body;
 
     // ✅ Gestion de l'image : soit upload Cloudinary, soit lien Supabase
     let coverImage;
@@ -70,6 +70,7 @@ const createBook = async (req, res) => {
       author,
       description,
       level,
+      subject: subject || "maths",
       badge,
       coverImage,
       fileUrl,
@@ -99,7 +100,7 @@ const updateBook = async (req, res) => {
     const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ message: "📘 Livre non trouvé." });
 
-    const { title, author, description, level, badge, imageSupabaseUrl, bookSupabaseUrl } = req.body;
+    const { title, author, description, level, subject, badge, imageSupabaseUrl, bookSupabaseUrl } = req.body;
 
     // ✅ Mise à jour de l'image : soit upload Cloudinary, soit lien Supabase
     if (req.files?.cover?.[0]?.path) {
@@ -119,6 +120,7 @@ const updateBook = async (req, res) => {
     book.author = author || book.author;
     book.description = description || book.description;
     book.level = level || book.level;
+    book.subject = subject || book.subject;
     book.badge = badge || book.badge;
 
     await book.save();

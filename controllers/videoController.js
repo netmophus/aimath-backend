@@ -64,7 +64,7 @@ const uploadToCloudinary = async (filePath, folder) => {
 
 const createVideo = async (req, res) => {
   try {
-    const { title, description, level, badge, videoUrl } = req.body;
+    const { title, description, level, subject, badge, videoUrl } = req.body;
 
     let videosSupplementaires = [];
     if (req.body.videosSupplementaires) {
@@ -84,6 +84,7 @@ const createVideo = async (req, res) => {
       title,
       description,
       level,
+      subject: subject || "maths",
       badge,
       videoUrl,
       thumbnail,
@@ -141,7 +142,7 @@ const updateVideo = async (req, res) => {
     const video = await Video.findById(req.params.id);
     if (!video) return res.status(404).json({ message: "Vidéo non trouvée." });
 
-    const { title, description, level, badge, videoUrl } = req.body;
+    const { title, description, level, subject, badge, videoUrl } = req.body;
 
     if (req.file?.path) {
       const newThumbnail = await uploadToCloudinary(req.file.path, "videos/thumbnails");
@@ -151,6 +152,7 @@ const updateVideo = async (req, res) => {
     video.title = title || video.title;
     video.description = description || video.description;
     video.level = level || video.level;
+    video.subject = subject || video.subject;
     video.badge = badge || video.badge;
     video.videoUrl = videoUrl || video.videoUrl;
 

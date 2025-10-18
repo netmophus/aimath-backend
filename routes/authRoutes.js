@@ -6,8 +6,9 @@ const {
   loginUser,
   verifyOTP,
   getMe,
-  sendResetCode,     // ✅ à ajouter
-  resetPassword,     // ✅ à ajouter
+  sendResetCode,
+  resetPassword,
+  resendOtp,
 } = require("../controllers/authController");
 const authMiddleware = require("../middlewares/authMiddleware");
 
@@ -44,6 +45,7 @@ const User = require("../models/userModel");
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/verify-otp", verifyOTP);
+router.post("/resend-otp", resendOtp);  // ✅ renvoyer l'OTP
 router.get("/me", authMiddleware, getMe);
 
 // 🔁 Réinitialisation mot de passe

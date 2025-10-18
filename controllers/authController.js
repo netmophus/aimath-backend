@@ -103,6 +103,51 @@ const generateToken = (id) => {
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString(); // 4 chiffres
 
+// 🔁 Renvoyer l'OTP
+const resendOtp = async (req, res) => {
+  const { phone } = req.body;
+
+  const formatPhone = (input) => {
+    const digits = input.replace(/\D/g, "");
+    return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
+  };
+  const formattedPhone = formatPhone(phone);
+
+  try {
+    const user = await User.findOne({ phone: formattedPhone });
+
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur introuvable." });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: "Utilisateur déjà vérifié." });
+    }
+
+    // Générer un nouveau code OTP
+    const otp = generateOTP();
+    user.otp = otp;
+    await user.save();
+
+    // Envoyer le SMS
+    const smsResponse = await sendSMS(
+      formattedPhone,
+      `Votre code de vérification est : ${otp}`
+    );
+
+    console.log(`🔕 OTP renvoyé pour ${formattedPhone} : ${otp}`);
+
+    if (!smsResponse.success) {
+      return res.status(500).json({ message: "Échec de l'envoi du SMS." });
+    }
+
+    return res.status(200).json({ message: "✅ Un nouveau code a été envoyé par SMS." });
+  } catch (error) {
+    console.error("❌ Erreur lors du renvoi de l'OTP :", error);
+    res.status(500).json({ message: "Erreur serveur." });
+  }
+};
+
 
 
 const registerUser = async (req, res) => {
@@ -414,4 +459,4 @@ const getMe = async (req, res) => {
 };
 
 
-module.exports = { registerUser, loginUser , verifyOTP, getMe, sendResetCode, resetPassword };
+module.exports = { registerUser, loginUser , verifyOTP, getMe, sendResetCode, resetPassword, resendOtp };

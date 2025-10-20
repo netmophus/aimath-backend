@@ -6,6 +6,7 @@ const SupportRequest = require("../models/SupportRequest");
 const MessageHistory = require("../models/MessageHistory");
 
 const MessageNotification = require("../models/MessageNotification"); // <-- à importer
+const cloudinary = require("../config/cloudinary"); // ✅ Pour supprimer les fichiers
 
 
 
@@ -279,11 +280,92 @@ const uploadChatFile = async (req, res) => {
 
 
 
+// ✅ Utilitaire pour extraire le public_id de l'URL Cloudinary
+const extractPublicIdFromUrl = (url) => {
+  if (!url) return null;
+  try {
+    const regex = /\/upload\/(?:v\d+\/)?(.+)\.\w+$/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+  } catch (err) {
+    console.error("Erreur extraction public_id:", err);
+    return null;
+  }
+};
+
+// ✅ Supprimer un message (élève)
+const deleteMessage = async (req, res) => {
+  try {
+    const studentId = req.user._id;
+    const { messageId } = req.params;
+
+    // Récupérer le message
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ message: "Message introuvable." });
+    }
+
+    // ✅ Vérifier que l'élève est l'expéditeur
+    if (message.from.toString() !== studentId.toString()) {
+      return res.status(403).json({ message: "Vous ne pouvez supprimer que vos propres messages." });
+    }
+
+    // ✅ Vérifier que l'élève a accès à cette conversation
+    const hasAccess = await SupportRequest.findOne({
+      student: studentId,
+      teacher: message.to,
+      status: "acceptee",
+      sessionStarted: true,
+    });
+
+    if (!hasAccess) {
+      return res.status(403).json({ message: "Accès refusé à cette conversation." });
+    }
+
+    // ✅ Si le message contient un fichier, le supprimer de Cloudinary
+    if (message.fileUrl) {
+      const publicId = extractPublicIdFromUrl(message.fileUrl);
+      if (publicId) {
+        let resourceType = "image";
+        if (message.fileType === "video") resourceType = "video";
+        else if (message.fileType === "audio") resourceType = "video"; // Cloudinary stocke l'audio comme vidéo
+        else if (message.fileType === "pdf") resourceType = "raw";
+
+        try {
+          await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+          console.log(`🗑️ Fichier supprimé de Cloudinary : ${publicId}`);
+        } catch (err) {
+          console.error("❌ Erreur suppression Cloudinary:", err);
+        }
+      }
+    }
+
+    // ✅ Supprimer le message de la base de données
+    await Message.findByIdAndDelete(messageId);
+
+    // ✅ Créer une notification pour l'enseignant
+    await MessageNotification.create({
+      user: message.to,
+      from: studentId,
+      messageId: message._id,
+      messageSnippet: "Un message a été supprimé",
+    });
+
+    console.log(`✅ Message ${messageId} supprimé par l'élève ${studentId}`);
+
+    res.json({ success: true, message: "Message supprimé avec succès.", messageId });
+  } catch (err) {
+    console.error("❌ Erreur deleteMessage (élève) :", err);
+    res.status(500).json({ message: "Erreur lors de la suppression du message." });
+  }
+};
+
 module.exports = {
   getAvailableTeachers,
   getMessagesWithTeacher,
   sendMessageToTeacher,
   uploadChatFile,
- getMessageHistory,
-
+  getMessageHistory,
+  deleteMessage, // ✅ Nouvelle fonction
 };

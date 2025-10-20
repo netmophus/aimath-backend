@@ -3,6 +3,7 @@ const User = require("../models/userModel");
 const Message = require("../models/Message");
 const StudentProfile = require('../models/studentProfileModel'); // à adapter selon ton chemin
 const MessageNotification = require("../models/MessageNotification"); // ✅ à ajouter si pas encore fait
+const cloudinary = require("../config/cloudinary"); // ✅ Pour supprimer les fichiers
 
 
 // 📌 1. Récupérer les élèves associés à l'enseignant avec session active
@@ -394,10 +395,111 @@ const getSupportRequestStatsForTeacher = async (req, res) => {
 
 
 
+// ✅ Fonction utilitaire pour extraire le public_id depuis une URL Cloudinary
+const extractPublicIdFromUrl = (url) => {
+  try {
+    // Exemple d'URL: https://res.cloudinary.com/demo/image/upload/v1234567890/chat/files/1234567890-audioMessage.webm
+    const parts = url.split('/');
+    const uploadIndex = parts.indexOf('upload');
+    if (uploadIndex === -1) return null;
+    
+    // Récupérer tout après "upload/vXXXXXXXXXX/"
+    const pathParts = parts.slice(uploadIndex + 2); // Sauter "upload" et "vXXXXXXXXXX"
+    const fullPath = pathParts.join('/');
+    
+    // Retirer l'extension
+    const publicId = fullPath.replace(/\.[^/.]+$/, '');
+    
+    console.log("🔍 Public ID extrait :", publicId);
+    return publicId;
+  } catch (err) {
+    console.error("❌ Erreur extraction public_id :", err);
+    return null;
+  }
+};
+
+// ✅ Supprimer un message (MongoDB + Cloudinary)
+const deleteMessage = async (req, res) => {
+  try {
+    const teacherId = req.user._id;
+    const { messageId } = req.params;
+
+    console.log(`🗑️ Tentative de suppression du message ${messageId} par ${teacherId}`);
+
+    // 1. Récupérer le message
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Message introuvable." });
+    }
+
+    // 2. Vérifier que c'est bien l'enseignant qui a envoyé le message
+    if (message.from.toString() !== teacherId.toString()) {
+      return res.status(403).json({ message: "Vous ne pouvez supprimer que vos propres messages." });
+    }
+
+    // 3. Vérifier que l'enseignant a bien accès à cette conversation
+    const isAllowed = await SupportRequest.findOne({
+      teacher: teacherId,
+      student: message.to,
+      status: "acceptee",
+      sessionStarted: true,
+    });
+
+    if (!isAllowed) {
+      return res.status(403).json({ message: "Accès non autorisé à cette conversation." });
+    }
+
+    // 4. Supprimer le fichier de Cloudinary si présent
+    if (message.fileUrl) {
+      console.log("📁 Fichier détecté, suppression de Cloudinary...");
+      const publicId = extractPublicIdFromUrl(message.fileUrl);
+      
+      if (publicId) {
+        try {
+          // Déterminer le resource_type selon le fileType
+          let resourceType = "image";
+          if (message.fileType === "video") {
+            resourceType = "video";
+          } else if (message.fileType === "audio") {
+            resourceType = "video"; // Cloudinary stocke l'audio comme video
+          } else if (message.fileType === "pdf") {
+            resourceType = "raw";
+          }
+
+          console.log(`🗑️ Suppression Cloudinary - Type: ${resourceType}, ID: ${publicId}`);
+          
+          const result = await cloudinary.uploader.destroy(publicId, { 
+            resource_type: resourceType 
+          });
+          
+          console.log("✅ Résultat suppression Cloudinary :", result);
+        } catch (cloudErr) {
+          console.error("⚠️ Erreur suppression Cloudinary (on continue quand même) :", cloudErr);
+          // On continue même si la suppression Cloudinary échoue
+        }
+      }
+    }
+
+    // 5. Supprimer le message de MongoDB
+    await Message.findByIdAndDelete(messageId);
+    console.log("✅ Message supprimé de MongoDB");
+
+    res.json({ 
+      success: true, 
+      message: "Message supprimé avec succès.",
+      messageId 
+    });
+  } catch (err) {
+    console.error("❌ Erreur deleteMessage :", err);
+    res.status(500).json({ message: "Erreur lors de la suppression du message." });
+  }
+};
+
 module.exports = {
   getAvailableStudents,
   getChatMessagesWithStudent,
   sendMessageToStudent,
   uploadChatFile,
-  getSupportRequestStatsForTeacher
+  getSupportRequestStatsForTeacher,
+  deleteMessage, // ✅ Nouvelle fonction
 };

@@ -10,6 +10,7 @@ const {
   sendMessageToStudent,
   uploadChatFile,
   getSupportRequestStatsForTeacher,
+  deleteMessage, // ✅ Nouvelle fonction
 
 } = require("../controllers/teacherChatController");
 
@@ -23,6 +24,9 @@ router.post("/chat/send", sendMessageToStudent);
 
 // Exemple de route
 router.post("/chat/upload", authMiddleware, uploadChat, uploadChatFile);
+
+// ✅ Supprimer un message
+router.delete("/chat/message/:messageId", deleteMessage);
 
 router.get("/support-requests/stats", authMiddleware, getSupportRequestStatsForTeacher);
 

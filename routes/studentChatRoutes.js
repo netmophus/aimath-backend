@@ -6,6 +6,7 @@ const {
   sendMessageToTeacher,
   uploadChatFile,
   getMessageHistory,
+  deleteMessage, // ✅ Nouvelle fonction
 } = require("../controllers/studentChatController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const { authorizeRoles } = require("../middlewares/roleMiddleware");
@@ -47,6 +48,7 @@ router.get(
   getMessageHistory
 );
 
-
+// ✅ Supprimer un message
+router.delete("/chat/message/:messageId", deleteMessage);
 
 module.exports = router;

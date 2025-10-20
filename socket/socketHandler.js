@@ -80,6 +80,16 @@ module.exports = (io) => {
       console.log(`💬 Message de ${socket.userName} vers ${to}`);
     });
 
+    // ✅ Message supprimé
+    socket.on("message:delete", ({ to, messageId }) => {
+      const roomId = [socket.userId, to].sort().join("-");
+      
+      // Notifier tous les participants de la room (y compris l'expéditeur)
+      io.to(roomId).emit("message:deleted", { messageId });
+      
+      console.log(`🗑️ Message ${messageId} supprimé par ${socket.userName}`);
+    });
+
     // ✅ Indicateur "en train d'écrire..."
     socket.on("typing:start", ({ to }) => {
       const roomId = [socket.userId, to].sort().join("-");

@@ -35,11 +35,10 @@ const allowedOrigins = [
     'https://www.myfahimta.com',
 //  'http://localhost:3000',
 //  'http://127.0.0.1:3000',
-//  'http://192.168.0.100:3000',
-//  'http://192.168.80.241:3000',
+//   'http://192.168.80.241:3000',
 //   'http://192.168.1.221:3000',
 //   'http://10.205.124.25:3000',
-//   'http://192.168.80.65:3000',
+//   'http:/192.168.80.129:3000',
  ];
 
 // ✅ Middleware CORS dynamique
@@ -159,6 +158,12 @@ app.use("/api/content-requests", require("./routes/contentRequestRoutes"));
 
 // ✅ Route Tutorials (Vidéos tutorielles)
 app.use("/api/tutorials", require("./routes/tutorialRoutes"));
+
+// ✅ Route Bibliothèque (Livres par matière)
+app.use("/api/library", require("./routes/libraryRoutes"));
+
+// ✅ Route Admin Bibliothèque (Gestion des livres)
+app.use("/api/admin/library", require("./routes/adminLibraryRoutes"));
 
 const paymentReportRoutes = require("./routes/paymentReportRoutes");
 app.use("/api/payments", paymentReportRoutes);  

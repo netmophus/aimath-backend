@@ -21,3 +21,5 @@ uploads/
 # Dossiers temporaires
 .cache/
 tmp/
+*.md
+

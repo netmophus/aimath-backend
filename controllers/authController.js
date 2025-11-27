@@ -2,40 +2,74 @@ const User = require("../models/userModel");
 const StudentProfile = require("../models/studentProfileModel");
 const jwt = require("jsonwebtoken");
 const { sendSMS } = require("../utils/sendSMS");
+const { sendOTPEmail, sendResetPasswordEmail } = require("../utils/sendEmail");
 const Otp = require("../models/OtpModel");
 
 
 
 const sendResetCode = async (req, res) => {
-  const { phone } = req.body;
+  const { phone, email } = req.body;
 
-  if (!phone) return res.status(400).json({ message: "Téléphone requis." });
-
-  const formattedPhone = phone.startsWith("+227") ? phone : `+227${phone.replace(/\D/g, "")}`;
+  if (!phone && !email) {
+    return res.status(400).json({ message: "Téléphone ou email requis." });
+  }
 
   try {
-    const user = await User.findOne({ phone: formattedPhone });
-    if (!user) {
-      return res.status(404).json({ message: "Aucun utilisateur avec ce téléphone." });
+    let user;
+    let formattedPhone = null;
+    let formattedEmail = null;
+
+    if (phone) {
+      formattedPhone = phone.startsWith("+227") ? phone : `+227${phone.replace(/\D/g, "")}`;
+      user = await User.findOne({ phone: formattedPhone });
+      if (!user) {
+        return res.status(404).json({ message: "Aucun utilisateur avec ce téléphone." });
+      }
+    } else if (email) {
+      formattedEmail = email.toLowerCase().trim();
+      user = await User.findOne({ email: formattedEmail });
+      if (!user) {
+        return res.status(404).json({ message: "Aucun utilisateur avec cet email." });
+      }
     }
 
     const code = Math.floor(1000 + Math.random() * 9000).toString(); // 4 chiffres
     const expiration = new Date(Date.now() + 5 * 60 * 1000); // expire dans 5 min
 
-    await Otp.deleteMany({ phone: formattedPhone }); // Supprimer les anciens OTP
-   await Otp.create({ phone: formattedPhone, otp: code, expiresAt: expiration });
-
-
-    const sms = await sendSMS(
-      formattedPhone,
-      `🔐 Code de réinitialisation Fahimta : ${code}`
-    );
-
-    if (!sms.success) {
-      return res.status(500).json({ message: "Échec d'envoi du SMS." });
+    // Supprimer les anciens OTP
+    if (formattedPhone) {
+      await Otp.deleteMany({ phone: formattedPhone });
+      await Otp.create({ phone: formattedPhone, otp: code, expiresAt: expiration });
+    } else if (formattedEmail) {
+      await Otp.deleteMany({ email: formattedEmail });
+      await Otp.create({ email: formattedEmail, otp: code, expiresAt: expiration });
     }
 
-    return res.status(200).json({ message: "✅ Code envoyé par SMS." });
+    // Envoyer le code par SMS ou email
+    if (formattedPhone) {
+      const sms = await sendSMS(
+        formattedPhone,
+        `🔐 Code de réinitialisation Fahimta : ${code}`
+      );
+
+      if (!sms.success) {
+        return res.status(500).json({ message: "Échec d'envoi du SMS." });
+      }
+
+      return res.status(200).json({ message: "✅ Code envoyé par SMS." });
+    } else if (formattedEmail) {
+      const emailResponse = await sendResetPasswordEmail(formattedEmail, code);
+
+      if (!emailResponse.success) {
+        console.error("❌ Erreur envoi email réinitialisation :", emailResponse.error);
+        return res.status(500).json({ 
+          message: "Échec de l'envoi de l'email. Veuillez vérifier votre adresse email et réessayer." 
+        });
+      }
+
+      console.log(`📧 Code de réinitialisation envoyé par email à ${formattedEmail} : ${code}`);
+      return res.status(200).json({ message: "✅ Code envoyé par email." });
+    }
   } catch (error) {
     console.error("❌ Erreur sendResetCode :", error);
     res.status(500).json({ message: "Erreur serveur." });
@@ -50,38 +84,60 @@ const sendResetCode = async (req, res) => {
 
 
 const resetPassword = async (req, res) => {
-  const { phone, otp, newPassword, confirmPassword } = req.body;
+  const { phone, email, otp, newPassword, confirmPassword } = req.body;
 
-  if (!phone || !otp || !newPassword || !confirmPassword) {
-    return res.status(400).json({ message: "Téléphone, OTP et deux mots de passe sont requis." });
+  if ((!phone && !email) || !otp || !newPassword || !confirmPassword) {
+    return res.status(400).json({ message: "Téléphone ou email, OTP et deux mots de passe sont requis." });
   }
   if (newPassword !== confirmPassword) {
     return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
   }
 
-  const formatPhone = (input) => {
-    const digits = String(input).replace(/\D/g, "");
-    return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
-  };
-  const formattedPhone = formatPhone(phone);
-
   try {
-    const otpEntry = await Otp.findOne({ phone: formattedPhone, otp });
-    if (!otpEntry) return res.status(400).json({ message: "Code invalide ou expiré." });
+    let otpEntry;
+    let user;
+    let formattedPhone = null;
+    let formattedEmail = null;
+
+    if (phone) {
+      const formatPhone = (input) => {
+        const digits = String(input).replace(/\D/g, "");
+        return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
+      };
+      formattedPhone = formatPhone(phone);
+      otpEntry = await Otp.findOne({ phone: formattedPhone, otp });
+      user = await User.findOne({ phone: formattedPhone });
+    } else if (email) {
+      formattedEmail = email.toLowerCase().trim();
+      otpEntry = await Otp.findOne({ email: formattedEmail, otp });
+      user = await User.findOne({ email: formattedEmail });
+    }
+
+    if (!otpEntry) {
+      return res.status(400).json({ message: "Code invalide ou expiré." });
+    }
+
     if (otpEntry.expiresAt && otpEntry.expiresAt < new Date()) {
       await Otp.deleteOne({ _id: otpEntry._id });
       return res.status(400).json({ message: "Code expiré. Demandez un nouveau code." });
     }
 
-    const user = await User.findOne({ phone: formattedPhone });
-    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé." });
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé." });
+    }
 
     user.provider = 'local';              // force le hook de hash
     user.password = newPassword;
     user.passwordConfirm = newPassword;   // <-- FIX: aligne avec la validation du modèle
     await user.save();
 
-    await Otp.deleteMany({ phone: formattedPhone });
+    // Supprimer les OTP utilisés
+    if (formattedPhone) {
+      await Otp.deleteMany({ phone: formattedPhone });
+    } else if (formattedEmail) {
+      await Otp.deleteMany({ email: formattedEmail });
+    }
+
     return res.json({ message: "✅ Mot de passe réinitialisé avec succès." });
   } catch (err) {
     console.error("❌ Erreur resetPassword :", err);
@@ -105,16 +161,23 @@ const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString(); //
 
 // 🔁 Renvoyer l'OTP
 const resendOtp = async (req, res) => {
-  const { phone } = req.body;
-
-  const formatPhone = (input) => {
-    const digits = input.replace(/\D/g, "");
-    return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
-  };
-  const formattedPhone = formatPhone(phone);
+  const { phone, email } = req.body;
 
   try {
-    const user = await User.findOne({ phone: formattedPhone });
+    let user;
+    
+    if (phone) {
+      const formatPhone = (input) => {
+        const digits = input.replace(/\D/g, "");
+        return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
+      };
+      const formattedPhone = formatPhone(phone);
+      user = await User.findOne({ phone: formattedPhone });
+    } else if (email) {
+      user = await User.findOne({ email: email.toLowerCase().trim() });
+    } else {
+      return res.status(400).json({ message: "Téléphone ou email requis." });
+    }
 
     if (!user) {
       return res.status(404).json({ message: "Utilisateur introuvable." });
@@ -129,19 +192,38 @@ const resendOtp = async (req, res) => {
     user.otp = otp;
     await user.save();
 
-    // Envoyer le SMS
-    const smsResponse = await sendSMS(
-      formattedPhone,
-      `Votre code de vérification est : ${otp}`
-    );
+    // Envoyer le SMS ou email selon la méthode
+    if (phone) {
+      const formatPhone = (input) => {
+        const digits = input.replace(/\D/g, "");
+        return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
+      };
+      const formattedPhone = formatPhone(phone);
+      const smsResponse = await sendSMS(
+        formattedPhone,
+        `Votre code de vérification est : ${otp}`
+      );
 
-    console.log(`🔕 OTP renvoyé pour ${formattedPhone} : ${otp}`);
+      console.log(`🔕 OTP renvoyé pour ${formattedPhone} : ${otp}`);
 
-    if (!smsResponse.success) {
-      return res.status(500).json({ message: "Échec de l'envoi du SMS." });
+      if (!smsResponse.success) {
+        return res.status(500).json({ message: "Échec de l'envoi du SMS." });
+      }
+
+      return res.status(200).json({ message: "✅ Un nouveau code a été envoyé par SMS." });
+    } else if (email) {
+      const emailResponse = await sendOTPEmail(email.toLowerCase().trim(), otp);
+      
+      if (!emailResponse.success) {
+        console.error("❌ Erreur envoi email OTP :", emailResponse.error);
+        return res.status(500).json({ 
+          message: "Échec de l'envoi de l'email. Veuillez vérifier votre adresse email et réessayer." 
+        });
+      }
+      
+      console.log(`📧 OTP renvoyé par email à ${email} : ${otp}`);
+      return res.status(200).json({ message: "✅ Un nouveau code a été envoyé par email." });
     }
-
-    return res.status(200).json({ message: "✅ Un nouveau code a été envoyé par SMS." });
   } catch (error) {
     console.error("❌ Erreur lors du renvoi de l'OTP :", error);
     res.status(500).json({ message: "Erreur serveur." });
@@ -209,10 +291,10 @@ const registerUser = async (req, res) => {
       });
     }
 
-    // 🔐 Inscription classique → vérifier téléphone + mot de passe + confirmation
-    if (!formattedPhone || !password || !confirmPassword) {
+    // 🔐 Inscription classique → vérifier téléphone OU email + mot de passe + confirmation
+    if ((!formattedPhone && !email) || !password || !confirmPassword) {
       return res.status(400).json({
-        message: "Téléphone, mot de passe et confirmation requis pour l'inscription classique.",
+        message: "Téléphone ou email, mot de passe et confirmation requis pour l'inscription classique.",
       });
     }
 
@@ -220,24 +302,37 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
     }
 
-    // 📩 Envoi OTP par SMS
+    // 📩 Génération OTP
     const otp = generateOTP();
-    const smsResponse = await sendSMS(
-      formattedPhone,
-      `Votre code de vérification est : ${otp}`
-    );
+    
+    // Envoi OTP par SMS si téléphone, sinon par email
+    if (formattedPhone) {
+      const smsResponse = await sendSMS(
+        formattedPhone,
+        `Votre code de vérification est : ${otp}`
+      );
 
-    // (en dev) log de l’OTP simulé
-    console.log(`🔕 Envoi de SMS désactivé. OTP simulé pour ${formattedPhone} : ${otp}`);
+      // (en dev) log de l'OTP simulé
+      console.log(`🔕 Envoi de SMS désactivé. OTP simulé pour ${formattedPhone} : ${otp}`);
 
-    if (!smsResponse.success) {
-      return res.status(500).json({ message: "Échec de l'envoi du SMS. Veuillez réessayer." });
+      if (!smsResponse.success) {
+        return res.status(500).json({ message: "Échec de l'envoi du SMS. Veuillez réessayer." });
+      }
+    } else if (email) {
+      const emailResponse = await sendOTPEmail(email.toLowerCase().trim(), otp);
+      
+      if (!emailResponse.success) {
+        console.error("❌ Erreur envoi email OTP :", emailResponse.error);
+        return res.status(500).json({ 
+          message: "Échec de l'envoi de l'email. Veuillez vérifier votre adresse email et réessayer." 
+        });
+      }
+      
+      console.log(`📧 OTP envoyé par email à ${email} : ${otp}`);
     }
 
     // ⚙️ Crée l'utilisateur (utilise la virtual passwordConfirm du modèle)
-    const user = new User({
-      phone: formattedPhone,
-      email,
+    const userData = {
       password,
       fullName,
       schoolName,
@@ -245,14 +340,26 @@ const registerUser = async (req, res) => {
       role,
       otp,
       isVerified: false,
-    });
+    };
+
+    if (formattedPhone) {
+      userData.phone = formattedPhone;
+    }
+    if (email) {
+      userData.email = email.toLowerCase().trim();
+    }
+
+    const user = new User(userData);
     user.passwordConfirm = confirmPassword; // ✅ passe la confirmation au modèle (pre('validate'))
 
     await user.save();
 
     return res.status(201).json({
-      message: "✅ Utilisateur enregistré. Veuillez vérifier votre téléphone.",
+      message: formattedPhone 
+        ? "✅ Utilisateur enregistré. Veuillez vérifier votre téléphone."
+        : "✅ Utilisateur enregistré. Veuillez vérifier votre email.",
       phone: user.phone,
+      email: user.email,
     });
   } catch (error) {
     console.error("❌ Erreur lors de l'inscription :", error);
@@ -262,17 +369,23 @@ const registerUser = async (req, res) => {
 
 
 const verifyOTP = async (req, res) => {
-  const { phone, otp } = req.body;
-
-  const formatPhone = (input) => {
-    const digits = input.replace(/\D/g, "");
-    return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
-  };
-
-  const formattedPhone = formatPhone(phone);
+  const { phone, email, otp } = req.body;
 
   try {
-    const user = await User.findOne({ phone: formattedPhone });
+    let user;
+    
+    if (phone) {
+      const formatPhone = (input) => {
+        const digits = input.replace(/\D/g, "");
+        return digits.startsWith("227") ? `+${digits}` : `+227${digits}`;
+      };
+      const formattedPhone = formatPhone(phone);
+      user = await User.findOne({ phone: formattedPhone });
+    } else if (email) {
+      user = await User.findOne({ email: email.toLowerCase().trim() });
+    } else {
+      return res.status(400).json({ message: "Téléphone ou email requis." });
+    }
 
     if (!user) {
       return res.status(404).json({ message: "Utilisateur introuvable." });
@@ -295,6 +408,7 @@ const verifyOTP = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (error) {
+    console.error("❌ Erreur lors de la vérification :", error);
     res.status(500).json({ message: "Erreur lors de la vérification." });
   }
 };

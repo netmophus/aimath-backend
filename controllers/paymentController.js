@@ -3,6 +3,7 @@ const PaymentHistory = require("../models/PaymentHistory");
 const AccessCodeBatch = require("../models/AccessCodeBatch");
 const { v4: uuidv4 } = require("uuid");
 const { sendSMS } = require("../utils/sendSMS");
+const { sendPaymentConfirmationEmail } = require("../utils/sendEmail");
 const axios = require("axios");
 
 const { maskCode } = require("../utils/mask");
@@ -220,6 +221,22 @@ const checkNitaAndActivate = async (req, res) => {
       console.log("📲 sendSMS (check-and-activate) →", smsRes);
     } catch (e) {
       console.error("⚠️ SMS error:", e?.message);
+    }
+
+    // Email (si l'utilisateur a un email)
+    if (user.email) {
+      try {
+        const emailRes = await sendPaymentConfirmationEmail(user.email, {
+          amount: amountVal,
+          reference: refToStore,
+          method: "NITA",
+          subscriptionEnd: newEnd,
+          plan: p === "annuel" || amountVal >= 15000 ? "annuel" : "mensuel",
+        });
+        console.log("📧 sendPaymentConfirmationEmail (check-and-activate) →", emailRes);
+      } catch (e) {
+        console.error("⚠️ Email error:", e?.message);
+      }
     }
 
     console.log("🏁 [/nita/check-and-activate] done OK for", user._id?.toString?.());
@@ -621,6 +638,17 @@ const redeemCode = async (req, res) => {
     const msg = `Fahimta: Votre abonnement par code ${normalizedCode} est actif jusqu'au ${end}. Merci !`;
     sendSMS(to, msg).catch(err => console.error("SMS redeemCode non envoyé:", err));
 
+    // 📧 Envoi de l'email (si l'utilisateur a un email)
+    if (user.email) {
+      sendPaymentConfirmationEmail(user.email, {
+        amount: batch.price ?? (batch.type === "annuel" ? 20000 : 2000),
+        reference: normalizedCode,
+        method: "Code",
+        subscriptionEnd: subscriptionEnd,
+        plan: batch.type === "annuel" ? "annuel" : "mensuel",
+      }).catch(err => console.error("Email redeemCode non envoyé:", err));
+    }
+
     return res.status(200).json({ message: "✅ Code activé avec succès !" });
   } catch (error) {
     console.error("Erreur dans redeemCode :", error);
@@ -826,6 +854,23 @@ const activateSubscription = async (req, res) => {
       console.error('⚠️ SMS error:', e?.message);
     }
 
+    // Email (si l'utilisateur a un email)
+    if (user.email) {
+      try {
+        const p = String(plan || "").toLowerCase();
+        const emailRes = await sendPaymentConfirmationEmail(user.email, {
+          amount: amountVal,
+          reference: refToStore,
+          method: source === "NITA" ? "NITA" : "Carte",
+          subscriptionEnd: newEnd,
+          plan: p === "annuel" || amountVal >= 15000 ? "annuel" : "mensuel",
+        });
+        console.log('📧 sendPaymentConfirmationEmail →', emailRes);
+      } catch (e) {
+        console.error('⚠️ Email error:', e?.message);
+      }
+    }
+
     console.log('🏁 [activateSubscription] done OK for', user._id?.toString?.());
     return res.status(200).json({
       message: "✅ Abonnement activé avec succès.",
@@ -1023,6 +1068,17 @@ const nitaCallbackPublic = async (req, res) => {
 
     const msg = `Fahimta: Votre abonnement est actif jusqu'au ${newEnd.toISOString().slice(0,10)}. Merci!`;
     sendSMS(phoneNorm, msg).catch(e => console.error('SMS callback non envoyé:', e));
+
+    // Email (si l'utilisateur a un email)
+    if (user.email) {
+      sendPaymentConfirmationEmail(user.email, {
+        amount: Number(bag.montant) || 2000,
+        reference: reference || reqId || 'NITA',
+        method: "NITA",
+        subscriptionEnd: newEnd,
+        plan: "mensuel",
+      }).catch(e => console.error('Email callback non envoyé:', e));
+    }
 
     console.log('✅ Abonnement activé via callback', { phone: user.phone, ref: reference || reqId });
     return res.status(200).send('OK');

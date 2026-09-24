@@ -167,6 +167,10 @@ _FRONTEND_URLS = config('FRONTEND_URL', default='')
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    # 3001 : port de repli de `next dev` quand 3000 est déjà occupé sur la
+    # machine de dev — arrive régulièrement, éviter un blocage CORS silencieux.
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
 ] + [origine.strip() for origine in _FRONTEND_URLS.split(',') if origine.strip()]
 
 # Durcissement HTTPS — seulement quand DEBUG=False, pour ne pas casser le

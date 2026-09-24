@@ -1,13 +1,16 @@
 from rest_framework import generics, permissions, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from programme.models import Cycle
 
+from .permissions import IsEleveActif
 from .serializers import (
     CyclePublicSerializer,
     InscriptionEleveSerializer,
     MeSerializer,
+    ProfilEleveSerializer,
     TelephoneTokenObtainPairSerializer,
 )
 
@@ -71,6 +74,24 @@ class MeView(generics.RetrieveAPIView):
 
     serializer_class = MeSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+
+class ProfilEleveView(generics.RetrieveUpdateAPIView):
+    """
+    GET/PATCH/PUT /api/eleve/profil/ — profil enrichi de l'élève connecté.
+
+    IsEleveActif (pas seulement IsAuthenticated) : cohérent avec le reste de
+    l'espace élève (voir programme/eleve_views.py). get_object() renvoie
+    TOUJOURS request.user, jamais un id de l'URL ou du corps — impossible de
+    modifier le profil de quelqu'un d'autre par ce endpoint.
+    """
+
+    serializer_class = ProfilEleveSerializer
+    permission_classes = [IsEleveActif]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_object(self):
         return self.request.user

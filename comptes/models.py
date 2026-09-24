@@ -1,3 +1,4 @@
+from cloudinary.models import CloudinaryField
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.core.validators import RegexValidator
@@ -120,6 +121,30 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Renseigné par un admin lors d'un rejet (voir comptes/admin_views.py).
     # Remis à vide si le compte est ensuite approuvé.
     motif_rejet = models.TextField("motif du rejet", blank=True, null=True)
+
+    # --- Profil élève enrichi (tous optionnels : ne casse aucun compte
+    # existant) — modifiables par l'élève lui-même via ProfilEleveSerializer
+    # (comptes/serializers.py), jamais par un paramètre arbitraire côté
+    # admin/autre élève.
+    class Genre(models.TextChoices):
+        FEMININ = "F", "Féminin"
+        MASCULIN = "M", "Masculin"
+        AUTRE = "autre", "Autre"
+
+    date_naissance = models.DateField("date de naissance", blank=True, null=True)
+    ecole = models.CharField("établissement scolaire", max_length=150, blank=True, null=True)
+    ville = models.CharField("ville", max_length=100, blank=True, null=True)
+    genre = models.CharField(
+        "genre", max_length=10, choices=Genre.choices, blank=True, null=True
+    )
+    # CloudinaryField (pas ImageField) : évite une dépendance à Pillow, et ne
+    # fait AUCUN appel réseau à la définition du modèle ni à `migrate` — le
+    # stockage réel sur Cloudinary n'intervient qu'au moment d'un vrai
+    # upload (voir ProfilEleveSerializer et settings.CLOUDINARY_CONFIGURE
+    # pour le comportement si les identifiants Cloudinary sont absents).
+    photo = CloudinaryField(
+        "photo de profil", blank=True, null=True, folder="fahimtana/profils"
+    )
 
     objects = UserManager()
 

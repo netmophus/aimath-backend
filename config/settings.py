@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     # Bibliothèques tierces
     'rest_framework',
     'corsheaders',
+    'cloudinary_storage',
+    'cloudinary',
 
     # Apps métier
     'programme',
@@ -125,6 +127,35 @@ STORAGES = {
 }
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Cloudinary (photo de profil élève, comptes.User.photo — voir ce champ).
+# Le système de fichiers d'Heroku est éphémère : les fichiers uploadés
+# localement (MEDIA_ROOT ci-dessus) disparaissent à chaque redéploiement,
+# d'où Cloudinary pour ce champ précis. CLOUDINARY_CONFIGURE est False tant
+# que les 3 variables ne sont pas toutes renseignées (cas du dev local par
+# défaut) : le champ `photo` retombe alors silencieusement sur le stockage
+# local (voir CloudinaryField, comptes/models.py) plutôt que de planter —
+# aucun appel réseau à Cloudinary n'est jamais tenté sans identifiants.
+CLOUDINARY_CLOUD_NAME = config('CLOUDINARY_CLOUD_NAME', default='')
+CLOUDINARY_API_KEY = config('CLOUDINARY_API_KEY', default='')
+CLOUDINARY_API_SECRET = config('CLOUDINARY_API_SECRET', default='')
+CLOUDINARY_CONFIGURE = bool(
+    CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET
+)
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
+    'API_KEY': CLOUDINARY_API_KEY,
+    'API_SECRET': CLOUDINARY_API_SECRET,
+}
+if CLOUDINARY_CONFIGURE:
+    import cloudinary as _cloudinary
+
+    _cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True,
+    )
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

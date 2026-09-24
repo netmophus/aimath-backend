@@ -1,5 +1,7 @@
 from django.urls import path
 
+from comptes.views import ProfilEleveView
+
 from .eleve_views import (
     LeconEleveDetailView,
     MesLeconsView,
@@ -18,4 +20,7 @@ urlpatterns = [
     path("mes-lecons/", MesLeconsView.as_view(), name="mes-lecons"),
     path("glossaire/", TermeGlossaireEleveListeView.as_view(), name="glossaire-liste"),
     path("glossaire/<slug:slug>/", TermeGlossaireEleveDetailView.as_view(), name="glossaire-detail"),
+    # Défini dans comptes/ (porte sur le modèle User), exposé ici pour
+    # rester sous le même préfixe /api/eleve/ que le reste de cet espace.
+    path("profil/", ProfilEleveView.as_view(), name="profil"),
 ]

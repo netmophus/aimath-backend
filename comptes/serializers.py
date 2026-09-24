@@ -1,5 +1,6 @@
 import re
 
+import cloudinary.exceptions
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
@@ -153,15 +154,87 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class MeSerializer(serializers.ModelSerializer):
-    """Profil de l'utilisateur connecté."""
+    """Profil de l'utilisateur connecté. photo_url : pour que l'avatar de
+    l'en-tête (voir EleveLayoutClient.tsx/SalutEleve.tsx côté front) reflète
+    la photo dès la réhydratation de session, sans appeler /eleve/profil/
+    séparément juste pour ça."""
 
     niveau = serializers.CharField(source="niveau.nom", default=None, read_only=True)
     serie = serializers.CharField(source="serie.nom", default=None, read_only=True)
+    photo_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
         fields = [
             "id", "telephone", "email", "prenom", "nom",
             "role", "statut", "niveau", "serie", "date_inscription",
+            "photo_url",
         ]
         read_only_fields = fields
+
+    def get_photo_url(self, obj: User) -> str | None:
+        return obj.photo.url if obj.photo else None
+
+
+class ProfilEleveSerializer(serializers.ModelSerializer):
+    """
+    GET/PATCH du profil de l'élève connecté (voir ProfilEleveView).
+
+    role, statut, niveau, serie, prenom, nom, telephone, email restent en
+    lecture seule ici : ce sont des champs sensibles ou gérés par un
+    processus séparé (inscription, validation admin) — jamais modifiables
+    par l'élève lui-même via cet endpoint. Seuls date_naissance, ecole,
+    ville, genre et photo sont modifiables.
+
+    `photo` est un FileField DRF générique plutôt qu'un ImageField : ce
+    dernier valide le contenu via Pillow, une dépendance qu'on évite (voir
+    comptes/models.py, CloudinaryField pour la même raison). La validation
+    du contenu (vrai format image) est déléguée à Cloudinary côté serveur.
+    """
+
+    niveau = serializers.CharField(source="niveau.nom", default=None, read_only=True)
+    serie = serializers.CharField(source="serie.nom", default=None, read_only=True)
+    photo = serializers.FileField(required=False, allow_null=True, write_only=True)
+    photo_url = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "id", "telephone", "email", "prenom", "nom",
+            "role", "statut", "niveau", "serie", "date_inscription",
+            "date_naissance", "ecole", "ville", "genre",
+            "photo", "photo_url",
+        ]
+        read_only_fields = [
+            "id", "telephone", "email", "prenom", "nom",
+            "role", "statut", "niveau", "serie", "date_inscription",
+        ]
+
+    def get_photo_url(self, obj: User) -> str | None:
+        return obj.photo.url if obj.photo else None
+
+    def validate_photo(self, value):
+        from django.conf import settings
+
+        if value is not None and not settings.CLOUDINARY_CONFIGURE:
+            raise serializers.ValidationError(
+                "L'envoi de photo n'est pas encore configuré sur cet "
+                "environnement (Cloudinary). Réessaie plus tard."
+            )
+        return value
+
+    def update(self, instance: User, validated_data: dict) -> User:
+        photo_fournie = "photo" in validated_data
+        photo = validated_data.pop("photo", None)
+        instance = super().update(instance, validated_data)
+        if photo_fournie:
+            # None efface la photo existante (CloudinaryField l'accepte).
+            instance.photo = photo
+            try:
+                instance.save(update_fields=["photo"])
+            except cloudinary.exceptions.Error as exc:
+                # L'appel réseau à Cloudinary (fichier invalide, identifiants
+                # rejetés, quota…) ne doit jamais remonter comme une erreur
+                # 500 brute : converti en 400 DRF lisible par le front.
+                raise serializers.ValidationError({"photo": [str(exc)]})
+        return instance

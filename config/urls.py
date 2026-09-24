@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/admin/', include('comptes.admin_urls')),
     path('api/admin/structure/', include('programme.admin_urls')),
     path('api/admin/', include('programme.programme_urls')),
+    path('api/admin/ia/prompts/', include('programme.prompt_ia_urls')),
     path('api/admin/ia/', include('programme.ia_urls')),
     path('api/eleve/', include('programme.eleve_urls')),
 ]

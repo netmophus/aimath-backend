@@ -2,7 +2,10 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from programme.models import Cycle
+
 from .serializers import (
+    CyclePublicSerializer,
     InscriptionEleveSerializer,
     MeSerializer,
     TelephoneTokenObtainPairSerializer,
@@ -40,6 +43,21 @@ class InscriptionEleveView(generics.CreateAPIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class ClassesPubliquesView(generics.ListAPIView):
+    """
+    GET /api/auth/classes/ — hiérarchie Cycle → Niveau → Série, publique
+    (AllowAny) : alimente la cascade du formulaire d'inscription élève
+    (/register), qui tourne sans authentification. Rien de sensible n'est
+    exposé (juste les cycles/niveaux/séries existants, id + nom).
+    Pas de pagination : réponse = tableau brut, la hiérarchie est petite.
+    """
+
+    serializer_class = CyclePublicSerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = None
+    queryset = Cycle.objects.prefetch_related("niveaux__series").order_by("ordre")
 
 
 class TelephoneTokenObtainPairView(TokenObtainPairView):

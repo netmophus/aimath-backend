@@ -1,5 +1,6 @@
 from datetime import timedelta
 from pathlib import Path
+import dj_database_url
 from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -14,7 +15,16 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 # selon les cas porter le nom d'hôte ngrok d'origine — on couvre les deux
 # pour éviter un blocage "Invalid HTTP_HOST". À retirer avec le reste du
 # test ngrok si non utilisé au quotidien.
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.ngrok-free.app', '.ngrok.io']
+#
+# ALLOWED_HOSTS_SUPPLEMENTAIRES : domaine(s) réel(s) de l'hébergeur en prod
+# (ex. "fahimtana-backend.herokuapp.com"), une liste séparée par des
+# virgules — jamais en dur ici, pour ne pas coder un domaine spécifique à un
+# hébergeur dans le code source.
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.ngrok-free.app', '.ngrok.io'] + [
+    hote.strip()
+    for hote in config('ALLOWED_HOSTS_SUPPLEMENTAIRES', default='').split(',')
+    if hote.strip()
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -38,6 +48,11 @@ AUTH_USER_MODEL = 'comptes.User'
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',          # doit être haut
     'django.middleware.security.SecurityMiddleware',
+    # Juste après SecurityMiddleware (exigence Whitenoise) : sert les
+    # fichiers statiques collectés (STATIC_ROOT) directement depuis
+    # gunicorn, sans serveur front (nginx/CDN) séparé — suffisant pour
+    # l'admin Django et les quelques assets statiques de l'API.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -65,16 +80,26 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST', default='127.0.0.1'),
-        'PORT': config('DB_PORT', default='5432'),
+# DATABASE_URL (format postgres://user:password@host:port/nom) : c'est ce
+# que fournissent Heroku et la plupart des hébergeurs Postgres managés. Si
+# elle est définie, elle prime — sinon on retombe sur les variables DB_*
+# existantes (dev local), pour ne rien casser de la config actuelle.
+_DATABASE_URL = config('DATABASE_URL', default='')
+if _DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(_DATABASE_URL, conn_max_age=600)
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DB_NAME'),
+            'USER': config('DB_USER'),
+            'PASSWORD': config('DB_PASSWORD'),
+            'HOST': config('DB_HOST', default='127.0.0.1'),
+            'PORT': config('DB_PORT', default='5432'),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -89,16 +114,44 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+# Cible de `manage.py collectstatic` — Whitenoise sert ce dossier en prod
+# (voir MIDDLEWARE). CompressedManifestStaticFilesStorage : fichiers
+# hashés + gzip/brotli, sûr à mettre en cache indéfiniment côté navigateur.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS — autoriser le front Next.js
+# CORS — autoriser le front Next.js. FRONTEND_URL : origine du frontend
+# déployé (ex. https://fahimtana.vercel.app), jamais codée en dur ici pour
+# ne pas lier ce fichier à un domaine Vercel précis.
+_FRONTEND_URL = config('FRONTEND_URL', default='')
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-]
+] + ([_FRONTEND_URL] if _FRONTEND_URL else [])
+
+# Durcissement HTTPS — seulement quand DEBUG=False, pour ne pas casser le
+# dev local en clair (http://127.0.0.1:8001). SECURE_PROXY_SSL_HEADER est
+# nécessaire sur Heroku (et la plupart des PaaS) : le routeur termine le
+# HTTPS et relaie en HTTP en interne avec cet en-tête — sans ce réglage,
+# Django croit chaque requête non sécurisée et SECURE_SSL_REDIRECT boucle.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # 7 jours pour commencer (voir avertissement Django security.W004) : à
+    # augmenter (ex. 31536000 = 1 an) une fois HTTPS confirmé stable partout.
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 7
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 # Configuration REST Framework
 REST_FRAMEWORK = {
@@ -125,11 +178,17 @@ IA_FOURNISSEUR = config('IA_FOURNISSEUR', default='anthropic')
 # claude-sonnet-5 : bon compromis qualité de rédaction / coût pour un usage
 # répété (un appel = une section de leçon). À ajuster ici si besoin.
 IA_MODELE = config('IA_MODELE', default='claude-sonnet-5')
-IA_TIMEOUT_SECONDES = config('IA_TIMEOUT_SECONDES', default=90, cast=int)
-# 8192 : claude-sonnet-5 consomme une partie du budget de sortie en tokens
-# de "réflexion" interne avant de produire le texte final — 4096 s'est avéré
-# insuffisant en pratique (réponse JSON tronquée pour la section exercices).
-IA_MAX_TOKENS_REPONSE = config('IA_MAX_TOKENS_REPONSE', default=8192, cast=int)
+IA_TIMEOUT_SECONDES = config('IA_TIMEOUT_SECONDES', default=180, cast=int)
+# 16000 : claude-sonnet-5 consomme une partie du budget de sortie en tokens
+# de "réflexion" interne avant de produire le texte final — 4096 puis 8192
+# se sont avérés insuffisants en pratique (cours/exercices tronqués). Ce
+# modèle accepte jusqu'à 128 000 tokens de sortie, mais au-delà d'environ
+# 21 000 le SDK Anthropic exige le streaming (non utilisé ici) sous peine de
+# timeout HTTP côté client — 16000 reste donc sûr en appel non-streaming tout
+# en doublant la marge par rapport à l'ancienne valeur. Si la troncature
+# revient (voir GenererSectionView, champ "tronque"), il faudra passer ce
+# endpoint en streaming plutôt que remonter encore ce chiffre.
+IA_MAX_TOKENS_REPONSE = config('IA_MAX_TOKENS_REPONSE', default=16000, cast=int)
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 
 # Notion de la leçon 13 ("Fonction logarithme népérien"), leçon MODÈLE

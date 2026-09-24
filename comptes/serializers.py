@@ -6,11 +6,40 @@ from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from programme.models import Niveau, Serie
+from programme.models import Cycle, Niveau, Serie
 
 from .models import User
 
 TELEPHONE_RE = re.compile(r"^\+227\d{8}$")
+
+
+# ============================================================
+#  Hiérarchie Cycle → Niveau → Série, PUBLIQUE (voir ClassesPubliquesView) :
+#  sert uniquement à alimenter la cascade du formulaire d'inscription élève,
+#  qui tourne sans authentification. Volontairement minimal (id + nom à
+#  chaque niveau) : rien de sensible n'est exposé.
+# ============================================================
+
+class SeriePubliqueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Serie
+        fields = ["id", "nom"]
+
+
+class NiveauPublicSerializer(serializers.ModelSerializer):
+    series = SeriePubliqueSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Niveau
+        fields = ["id", "nom", "series"]
+
+
+class CyclePublicSerializer(serializers.ModelSerializer):
+    niveaux = NiveauPublicSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Cycle
+        fields = ["id", "nom", "niveaux"]
 
 
 class InscriptionEleveSerializer(serializers.ModelSerializer):

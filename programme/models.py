@@ -147,6 +147,13 @@ class Lecon(models.Model):
     demonstrations = models.TextField(blank=True)           # Markdown + LaTeX
     a_retenir = models.TextField(blank=True, default="")    # Markdown + LaTeX
 
+    # Sujet type examen : énoncé noté (2-4 exercices, barème) + corrigé rédigé,
+    # séparés par un titre "## Corrigé" dans le Markdown (voir
+    # programme.ia.prompts.SECTIONS["sujet_examen"]) — c'est ce titre que le
+    # front élève repère pour flouter uniquement la partie corrigé, comme les
+    # corrigés d'exercices (voir components/eleve/CarteCorrigeExamen.tsx).
+    sujet_examen = models.TextField(blank=True, default="")  # Markdown + LaTeX
+
     statut = models.CharField(
         max_length=20, choices=Statut.choices, default=Statut.BROUILLON
     )
@@ -301,3 +308,42 @@ class CharteNotation(models.Model):
         """La charte à utiliser dans les prompts : la plus récente parmi les
         actives, ou None si aucune n'existe encore en base."""
         return cls.objects.filter(active=True).order_by('-modifie_le').first()
+
+
+class PromptSectionNotion(models.Model):
+    """Prompt de génération IA personnalisé, pour UNE notion et UNE section
+    (histoire, cours, exercices…). Quand une ligne existe pour ce couple,
+    son `texte` REMPLACE la consigne par défaut de la section (voir
+    programme.ia.prompts.SECTIONS) — la charte de notation et les 3 colonnes
+    officielles de la notion restent, elles, TOUJOURS injectées
+    automatiquement, quel que soit ce prompt (voir construire_prompt).
+    Absence de ligne pour ce couple = comportement de génération par défaut.
+
+    Rattachée à la Notion (pas à la Lecon) : la génération elle-même
+    s'appuie sur la Notion, indépendamment de l'existence d'une leçon
+    (voir programme.ia_views._recuperer_notion).
+
+    `section` n'a volontairement pas de `choices=` ici : la liste des
+    sections valides vit dans programme.ia.prompts.SECTIONS, et l'importer
+    ici créerait un import circulaire (prompts.py importe déjà ce module
+    pour Notion/Lecon). La validation des clés se fait au niveau du
+    serializer (programme.prompt_ia_serializers), comme pour
+    programme.ia_serializers.SECTIONS_CHOICES.
+    """
+
+    notion = models.ForeignKey(
+        Notion, on_delete=models.CASCADE, related_name='prompts_personnalises'
+    )
+    section = models.CharField(max_length=20)
+    texte = models.TextField()
+    cree_le = models.DateTimeField(auto_now_add=True)
+    modifie_le = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "prompt personnalisé"
+        verbose_name_plural = "prompts personnalisés"
+        unique_together = ['notion', 'section']
+        ordering = ['notion_id', 'section']
+
+    def __str__(self):
+        return f"prompt {self.section} — {self.notion}"

@@ -14,7 +14,7 @@ from comptes.permissions import IsAdminRole
 from .ia.exceptions import IAConfigurationInvalide, IAErreur, SectionInconnue
 from .ia.service import generer_section, verifier_contenu
 from .ia_serializers import GenererSectionSerializer, VerifierContenuSerializer
-from .models import Notion
+from .models import Notion, PromptSectionNotion
 
 _SELECT_RELATED_NOTION = (
     "chapitre__theme__programme__matiere",
@@ -58,16 +58,33 @@ class GenererSectionView(APIView):
         if erreur is not None:
             return erreur
 
+        prompt_perso = (
+            PromptSectionNotion.objects.filter(notion=notion, section=section)
+            .values_list("texte", flat=True)
+            .first()
+        )
+
         try:
-            resultat = generer_section(notion, section)
+            resultat = generer_section(notion, section, prompt_perso=prompt_perso)
         except SectionInconnue as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except IAErreur as exc:
             return Response({"detail": str(exc)}, status=_statut_pour_erreur(exc))
 
-        if isinstance(resultat, list):
-            return Response({"exercices": resultat})
-        return Response({"contenu": resultat})
+        # Le contenu partiel est renvoyé même tronqué (pour ne rien perdre),
+        # mais TOUJOURS accompagné de `tronque` — jamais présenté comme
+        # complet sans ce signal explicite. Voir ResultatGeneration.
+        data: dict = {"tronque": resultat.tronque}
+        if resultat.tronque:
+            data["message"] = (
+                "La génération a été coupée avant la fin (limite de tokens atteinte). "
+                "Le contenu est incomplet — régénère, ou complète-le manuellement avant de publier."
+            )
+        if isinstance(resultat.contenu, list):
+            data["exercices"] = resultat.contenu
+        else:
+            data["contenu"] = resultat.contenu
+        return Response(data)
 
 
 class VerifierContenuView(APIView):

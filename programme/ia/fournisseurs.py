@@ -32,13 +32,20 @@ from .exceptions import (
 @dataclass(frozen=True)
 class ReponseIA:
     """Résultat d'un appel IA : le texte généré + de quoi estimer un coût
-    (voir programme.ia.cout), sans jamais transporter la clé API."""
+    (voir programme.ia.cout), sans jamais transporter la clé API.
+
+    `tronque` (dérivé de `stop_reason == "max_tokens"`) signale que `texte`
+    s'arrête au milieu de la génération, coupé par IA_MAX_TOKENS_REPONSE —
+    à propager jusqu'à l'appelant, JAMAIS à traiter comme un contenu complet
+    (voir programme.ia.service et programme.ia_views)."""
 
     texte: str
     fournisseur: str
     modele: str
     tokens_entree: int | None = None
     tokens_sortie: int | None = None
+    stop_reason: str | None = None
+    tronque: bool = False
 
 
 def appeler_ia(system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> ReponseIA:
@@ -108,20 +115,28 @@ def _appeler_anthropic(system_prompt: str, user_prompt: str, *, max_tokens: int)
     texte = "".join(
         bloc.text for bloc in reponse.content if getattr(bloc, "type", None) == "text"
     ).strip()
+    stop_reason = getattr(reponse, "stop_reason", None)
     if not texte:
+        if stop_reason == "max_tokens":
+            raise IAReponseVide(
+                "La génération a atteint la limite de tokens (IA_MAX_TOKENS_REPONSE) "
+                "avant de produire le moindre texte — probablement absorbée par le "
+                "raisonnement interne du modèle. Augmente IA_MAX_TOKENS_REPONSE."
+            )
         raise IAReponseVide("Le fournisseur IA a renvoyé une réponse vide.")
 
     usage = getattr(reponse, "usage", None)
     tokens_entree = getattr(usage, "input_tokens", None)
     tokens_sortie = getattr(usage, "output_tokens", None)
+    tronque = stop_reason == "max_tokens"
 
     # Suivi de consommation (jamais la clé, jamais le contenu) — utile pour
     # surveiller le coût d'une fonctionnalité déclenchée manuellement par un
-    # admin. `stop_reason == "max_tokens"` signale une réponse tronquée :
-    # utile à repérer si IA_MAX_TOKENS_REPONSE s'avère trop juste.
+    # admin. `stop_reason == "max_tokens"` signale une réponse tronquée : on
+    # ne se contente plus de le journaliser, voir `tronque` sur ReponseIA.
     logger.info(
         "appel IA anthropic modele=%s tokens_entree=%s tokens_sortie=%s stop_reason=%s",
-        modele, tokens_entree, tokens_sortie, getattr(reponse, "stop_reason", None),
+        modele, tokens_entree, tokens_sortie, stop_reason,
     )
 
     return ReponseIA(
@@ -130,4 +145,6 @@ def _appeler_anthropic(system_prompt: str, user_prompt: str, *, max_tokens: int)
         modele=modele,
         tokens_entree=tokens_entree,
         tokens_sortie=tokens_sortie,
+        stop_reason=stop_reason,
+        tronque=tronque,
     )

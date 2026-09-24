@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 
 from ..models import Notion
 from .exceptions import IAErreur, SectionInconnue
@@ -16,18 +17,53 @@ from .prompts import SECTIONS, charte_active_texte, construire_contexte_notion, 
 DIFFICULTES_VALIDES = {"facile", "moyen", "difficile"}
 
 
-def generer_section(notion: Notion, section: str) -> str | list[dict]:
-    """Génère UNE section pour UNE notion. Renvoie un texte Markdown pour les
-    sections texte, ou une liste de {enonce, corrige, difficulte} pour
-    "exercices". Ne touche jamais à la base (aucune écriture)."""
+@dataclass(frozen=True)
+class ResultatGeneration:
+    """Résultat d'une génération de section, à faire remonter tel quel
+    jusqu'à la réponse HTTP (voir programme.ia_views.GenererSectionView) :
+    `contenu` PEUT être partiel — c'est `tronque` qui dit s'il faut se fier
+    au texte tel quel ou avertir l'admin qu'il est coupé. Jamais l'inverse :
+    ne jamais renvoyer un contenu coupé sans que `tronque` soit True."""
 
-    system_prompt, user_prompt = construire_prompt(notion, section)
+    contenu: str | list[dict]
+    tronque: bool
+
+
+def generer_section(
+    notion: Notion, section: str, prompt_perso: str | None = None
+) -> ResultatGeneration:
+    """Génère UNE section pour UNE notion. `contenu` est un texte Markdown
+    pour les sections texte, ou une liste de {enonce, corrige, difficulte}
+    pour "exercices". Ne touche jamais à la base (aucune écriture).
+
+    `prompt_perso`, s'il est fourni, remplace la consigne par défaut de la
+    section — voir construire_prompt pour ce qui reste toujours injecté
+    (charte, colonnes officielles, contrat JSON des exercices)."""
+
+    system_prompt, user_prompt = construire_prompt(notion, section, prompt_perso=prompt_perso)
     reponse = appeler_ia(system_prompt, user_prompt)
 
     spec = SECTIONS[section]
     if spec.sortie_json:
-        return _parser_exercices(reponse.texte)
-    return reponse.texte
+        if reponse.tronque:
+            # Une réponse coupée en plein milieu du JSON échoue quasi
+            # systématiquement au parsing (liste/objet non refermés) — on le
+            # vérifie quand même (elle peut être valide si la coupure tombe
+            # juste après le dernier "]"), mais si ça échoue on remplace le
+            # message de parsing générique par un message qui pointe la
+            # vraie cause : la limite de tokens, pas un JSON mal formé.
+            try:
+                exercices = _parser_exercices(reponse.texte)
+            except IAErreur as exc:
+                raise IAErreur(
+                    "La génération des exercices a été coupée avant la fin "
+                    "(limite de tokens atteinte) : le JSON est incomplet. "
+                    "Régénère, ou augmente IA_MAX_TOKENS_REPONSE si ça persiste."
+                ) from exc
+            return ResultatGeneration(contenu=exercices, tronque=True)
+        return ResultatGeneration(contenu=_parser_exercices(reponse.texte), tronque=False)
+
+    return ResultatGeneration(contenu=reponse.texte, tronque=reponse.tronque)
 
 
 def _parser_exercices(texte: str) -> list[dict]:

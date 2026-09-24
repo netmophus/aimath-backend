@@ -138,6 +138,7 @@ class LeconEleveSerializer(serializers.ModelSerializer):
             "histoire",
             "objectifs_pedagogiques", "prerequis_texte",
             "cours_redige", "demonstrations", "a_retenir",
+            "sujet_examen",
             "exercices", "videos", "ressources",
         ]
 

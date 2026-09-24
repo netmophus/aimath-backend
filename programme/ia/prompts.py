@@ -53,6 +53,29 @@ class SectionSpec:
     verifiable: bool = False  # section mathématique éligible à /verifier/
 
 
+# Contrat de sortie JSON strict de la section "exercices", isolé dans sa
+# propre constante pour pouvoir être ré-injecté APRÈS un prompt personnalisé
+# (voir construire_prompt) : _parser_exercices (programme.ia.service) dépend
+# de cette structure exacte pour parser la réponse — un prompt personnalisé
+# ne doit jamais pouvoir la faire disparaître, seulement piloter le contenu
+# pédagogique des exercices générés.
+CONTRAT_JSON_EXERCICES = """FORMAT ATTENDU (section : exercices) — SORTIE JSON STRICTE :
+Réponds UNIQUEMENT par un tableau JSON valide, SANS texte autour et SANS \
+balises ```json, de la forme exacte :
+[
+  {"enonce": "...", "corrige": "...", "difficulte": "facile"},
+  {"enonce": "...", "corrige": "...", "difficulte": "moyen"},
+  {"enonce": "...", "corrige": "...", "difficulte": "difficile"}
+]
+- Exactement 3 exercices, gradués : un facile, un moyen, un difficile — tous \
+strictement dans le cadre du programme officiel donné plus bas.
+- "enonce" et "corrige" : Markdown + LaTeX, en respectant la charte de \
+notation. Comme ce sont des chaînes JSON, ÉCHAPPE les antislashs LaTeX \
+(exemple : `\\\\ln`, `\\\\dfrac`, `\\\\int`) pour produire un JSON valide.
+- "difficulte" ∈ "facile" | "moyen" | "difficile" exactement (en minuscules, \
+sans accent)."""
+
+
 SECTIONS: dict[str, SectionSpec] = {
     "histoire": SectionSpec(
         cle="histoire",
@@ -137,21 +160,35 @@ tableau). Ne redémontre rien, ne réexplique rien.
         champ_lecon="",  # traité à part : few-shot = les 3 exercices de la leçon modèle
         sortie_json=True,
         verifiable=True,
-        consignes="""FORMAT ATTENDU (section : exercices) — SORTIE JSON STRICTE :
-Réponds UNIQUEMENT par un tableau JSON valide, SANS texte autour et SANS \
-balises ```json, de la forme exacte :
-[
-  {"enonce": "...", "corrige": "...", "difficulte": "facile"},
-  {"enonce": "...", "corrige": "...", "difficulte": "moyen"},
-  {"enonce": "...", "corrige": "...", "difficulte": "difficile"}
-]
-- Exactement 3 exercices, gradués : un facile, un moyen, un difficile — tous \
-strictement dans le cadre du programme officiel donné plus bas.
-- "enonce" et "corrige" : Markdown + LaTeX, en respectant la charte de \
-notation. Comme ce sont des chaînes JSON, ÉCHAPPE les antislashs LaTeX \
-(exemple : `\\\\ln`, `\\\\dfrac`, `\\\\int`) pour produire un JSON valide.
-- "difficulte" ∈ "facile" | "moyen" | "difficile" exactement (en minuscules, \
-sans accent).""",
+        consignes=CONTRAT_JSON_EXERCICES,
+    ),
+    "sujet_examen": SectionSpec(
+        cle="sujet_examen",
+        libelle="sujet type examen",
+        champ_lecon="sujet_examen",
+        verifiable=True,
+        consignes="""FORMAT ATTENDU (section : sujet type examen) :
+- Commence par un en-tête de deux lignes, AVANT le premier exercice, \
+indiquant la durée indicative (ex. "Durée : 1 heure") et le barème total \
+(ex. "Barème : /20").
+- Puis 2 à 4 exercices notés, de difficulté CROISSANTE, chacun sous un titre \
+`### Exercice N (X points)` — la somme des points de tous les exercices doit \
+être exactement égale au barème total annoncé en en-tête.
+- Chaque exercice reste STRICTEMENT dans le périmètre de la notion (mêmes \
+colonnes officielles que pour les autres sections) — jamais une notion non \
+encore couverte par le programme.
+- Après le dernier exercice, un titre `## Corrigé` (EXACTEMENT ce texte, \
+rien d'autre après "Corrigé") introduit la partie corrigée : reprends CHAQUE \
+exercice, dans l'ordre, avec une résolution détaillée et rédigée (pas \
+seulement le résultat final) — même rigueur que pour la section \
+"démonstrations". À l'intérieur du corrigé, N'UTILISE AUCUN sous-titre \
+Markdown (pas de `###`) pour séparer les exercices — introduis chacun par \
+une phrase ou un texte en gras ("**Exercice 1.**"), en prose continue.
+- N'utilise AUCUN titre de niveau 1 (`#`) ; le titre de la leçon est déjà \
+géré par l'application. `##` est réservé au seul titre "Corrigé" de cette \
+section — les exercices de l'énoncé utilisent `###`, jamais `##`.
+- Réponds UNIQUEMENT avec le contenu Markdown, sans préambule ni commentaire \
+méta.""",
     ),
 }
 
@@ -219,15 +256,36 @@ def charte_active_texte() -> str:
     return charte.contenu if charte else CHARTE_ABSENTE
 
 
-def construire_prompt(notion: Notion, section: str) -> tuple[str, str]:
+def construire_prompt(
+    notion: Notion, section: str, prompt_perso: str | None = None
+) -> tuple[str, str]:
     """Construit (system_prompt, user_prompt) pour générer `section` sur
-    `notion`. Lève SectionInconnue si `section` n'est pas dans SECTIONS."""
+    `notion`. Lève SectionInconnue si `section` n'est pas dans SECTIONS.
+
+    `prompt_perso` (texte saisi par l'admin pour CETTE notion × section, voir
+    programme.models.PromptSectionNotion) REMPLACE la consigne par défaut de
+    la section quand il est fourni et non vide. La charte de notation
+    (SYSTEM_COMMUN) et les 3 colonnes officielles (construire_contexte_notion,
+    dans le user prompt) restent, elles, TOUJOURS injectées automatiquement —
+    non négociable, un prompt perso ne peut ni les retirer ni les affaiblir.
+
+    Cas particulier "exercices" (spec.sortie_json) : même avec un prompt
+    perso, CONTRAT_JSON_EXERCICES est toujours présent en fin de consignes —
+    le prompt perso pilote le contenu pédagogique des exercices, jamais la
+    structure de sortie dont dépend _parser_exercices."""
 
     spec = SECTIONS.get(section)
     if spec is None:
         raise SectionInconnue(f"Section inconnue : « {section} ».")
 
-    system_prompt = SYSTEM_COMMUN.format(charte=charte_active_texte()) + "\n" + spec.consignes
+    prompt_perso = (prompt_perso or "").strip()
+
+    if spec.sortie_json:
+        consignes = f"{prompt_perso}\n\n{CONTRAT_JSON_EXERCICES}" if prompt_perso else spec.consignes
+    else:
+        consignes = prompt_perso or spec.consignes
+
+    system_prompt = SYSTEM_COMMUN.format(charte=charte_active_texte()) + "\n" + consignes
 
     bloc_exemple = _bloc_exemple_exercices() if spec.sortie_json else _bloc_exemple_texte(spec)
 

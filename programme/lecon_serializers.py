@@ -136,6 +136,7 @@ class LeconDetailSerializer(serializers.ModelSerializer):
             "objectifs_pedagogiques",
             "prerequis_texte", "prerequis_lecons",
             "cours_redige", "demonstrations", "a_retenir",
+            "sujet_examen",
             "exercices", "videos", "ressources",
             "cree_le", "modifie_le",
         ]
@@ -175,6 +176,7 @@ class LeconEcritureSerializer(serializers.ModelSerializer):
             "objectifs_pedagogiques",
             "prerequis_texte", "prerequis_lecons",
             "cours_redige", "demonstrations", "a_retenir",
+            "sujet_examen",
             "statut",
             "exercices", "videos", "ressources",
         ]

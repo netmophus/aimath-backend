@@ -3,7 +3,7 @@ from .models import (
     Cycle, Niveau, Serie, Matiere,
     Programme, Theme, Chapitre, Notion,
     Lecon, Exercice, Video, Ressource,
-    TermeGlossaire, CharteNotation,
+    TermeGlossaire, CharteNotation, PromptSectionNotion,
 )
 
 
@@ -100,7 +100,7 @@ class LeconAdmin(admin.ModelAdmin):
         'histoire',
         'objectifs_pedagogiques',
         'prerequis_texte', 'prerequis_lecons',
-        'cours_redige', 'demonstrations', 'a_retenir',
+        'cours_redige', 'demonstrations', 'a_retenir', 'sujet_examen',
         'statut',
     ]
     inlines = [ExerciceInline, VideoInline, RessourceInline]
@@ -125,4 +125,16 @@ class CharteNotationAdmin(admin.ModelAdmin):
     list_display = ['libelle', 'active', 'modifie_le']
     list_filter = ['active']
     fields = ['libelle', 'active', 'contenu', 'cree_le', 'modifie_le']
+    readonly_fields = ['cree_le', 'modifie_le']
+
+
+@admin.register(PromptSectionNotion)
+class PromptSectionNotionAdmin(admin.ModelAdmin):
+    """Prompts personnalisés par notion × section — voir aussi l'écran dédié
+    dans l'éditeur de leçon du front admin (plus pratique au quotidien)."""
+
+    list_display = ['notion', 'section', 'modifie_le']
+    list_filter = ['section']
+    search_fields = ['notion__titre']
+    fields = ['notion', 'section', 'texte', 'cree_le', 'modifie_le']
     readonly_fields = ['cree_le', 'modifie_le']

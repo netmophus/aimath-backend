@@ -18,6 +18,10 @@ db.sqlite3-journal
 # Fichiers uploadés
 /media/
 
+# Fichiers statiques collectés (générés par collectstatic au déploiement,
+# jamais à committer)
+/staticfiles/
+
 # Fichiers temporaires / éditeurs
 *.log
 *.tmp

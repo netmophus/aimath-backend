@@ -128,14 +128,15 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS — autoriser le front Next.js. FRONTEND_URL : origine du frontend
-# déployé (ex. https://fahimtana.vercel.app), jamais codée en dur ici pour
-# ne pas lier ce fichier à un domaine Vercel précis.
-_FRONTEND_URL = config('FRONTEND_URL', default='')
+# CORS — autoriser le front Next.js. FRONTEND_URL : une ou plusieurs
+# origines du frontend déployé, séparées par des virgules (ex.
+# "https://fahimtana.herokuapp.com,https://myfahimta.com,https://www.myfahimta.com"),
+# jamais codées en dur ici pour ne pas lier ce fichier à un domaine précis.
+_FRONTEND_URLS = config('FRONTEND_URL', default='')
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-] + ([_FRONTEND_URL] if _FRONTEND_URL else [])
+] + [origine.strip() for origine in _FRONTEND_URLS.split(',') if origine.strip()]
 
 # Durcissement HTTPS — seulement quand DEBUG=False, pour ne pas casser le
 # dev local en clair (http://127.0.0.1:8001). SECURE_PROXY_SSL_HEADER est

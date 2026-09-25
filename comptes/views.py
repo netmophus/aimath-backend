@@ -21,6 +21,7 @@ from .cartes import (
 )
 from .models import CarteFahimta
 from .permissions import IsEleveActif
+from .sms import envoyer_sms
 from .serializers import (
     ActiverCarteSerializer,
     CarteRecueEleveSerializer,
@@ -170,6 +171,15 @@ class ActiverCarteView(APIView):
             carte.save(update_fields=["statut", "utilisee_par", "date_activation"])
 
         reinitialiser_echecs(user)
+
+        # SMS de confirmation (voir comptes.sms) — APRÈS le commit, jamais
+        # dans le bloc atomique : envoyer_sms() ne lève jamais, mais un SMS
+        # ne doit de toute façon jamais retarder/conditionner la réponse de
+        # succès d'une activation déjà actée en base.
+        envoyer_sms(
+            user.telephone,
+            f"Fahimta : ton abonnement est actif jusqu'au {formater_date_fr(nouvelle_date)}. Bon travail !",
+        )
 
         return Response(
             {

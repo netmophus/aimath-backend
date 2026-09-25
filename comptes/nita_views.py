@@ -30,6 +30,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .cartes import formater_date_fr
 from .models import PaiementNita, User
 from .nita import (
     PLANS_NITA,
@@ -45,6 +46,7 @@ from .nita_serializers import (
     VerifierPaiementNitaSerializer,
 )
 from .permissions import IsAdminRole, IsEleveActif
+from .sms import envoyer_sms
 
 
 def crediter_paiement_nita(paiement_id: int) -> bool:
@@ -56,7 +58,12 @@ def crediter_paiement_nita(paiement_id: int) -> bool:
     maintenant" arrivant en même temps) se sérialisent sur CE verrou — le
     second constate, une fois le premier terminé, que le statut est déjà
     "confirme" et ne crédite pas une seconde fois. Retourne True si CET
-    appel a effectivement crédité, False si c'était déjà fait avant."""
+    appel a effectivement crédité, False si c'était déjà fait avant.
+
+    Le SMS de confirmation (voir comptes.sms) est envoyé ICI, au même
+    endroit que la prolongation elle-même — même raison que pour
+    ActiverCarteView (comptes/views.py) : un seul point de crédit par
+    chemin d'activation, aucun risque d'oublier ce cas."""
     with transaction.atomic():
         paiement = PaiementNita.objects.select_for_update().get(pk=paiement_id)
         if paiement.statut == PaiementNita.Statut.CONFIRME:
@@ -65,12 +72,22 @@ def crediter_paiement_nita(paiement_id: int) -> bool:
         user = User.objects.select_for_update().get(pk=paiement.user_id)
         aujourdhui = timezone.localdate()
         base = max(aujourdhui, user.abonnement_actif_jusqu_au or aujourdhui)
-        user.abonnement_actif_jusqu_au = base + timedelta(days=paiement.duree_jours)
+        nouvelle_date = base + timedelta(days=paiement.duree_jours)
+        user.abonnement_actif_jusqu_au = nouvelle_date
         user.save(update_fields=["abonnement_actif_jusqu_au"])
 
         paiement.statut = PaiementNita.Statut.CONFIRME
         paiement.date_confirmation = timezone.now()
         paiement.save(update_fields=["statut", "date_confirmation"])
+
+        telephone = user.telephone
+
+    # Hors du bloc atomique — jamais de SMS pendant que des lignes sont
+    # verrouillées, et envoyer_sms() ne lève jamais de toute façon.
+    envoyer_sms(
+        telephone,
+        f"Fahimta : ton abonnement est actif jusqu'au {formater_date_fr(nouvelle_date)}. Bon travail !",
+    )
 
     return True
 

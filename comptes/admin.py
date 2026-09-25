@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from .cartes import code_masque, reponse_csv_cartes
 from .forms import UserChangeForm, UserCreationForm
-from .models import CarteFahimta, PaiementNita, User
+from .models import CarteFahimta, PaiementNita, RappelAbonnementEnvoye, User
 
 
 @admin.register(User)
@@ -154,6 +154,24 @@ class PaiementNitaAdmin(admin.ModelAdmin):
     search_fields = ["request_id", "reference_nita", "telephone", "user__telephone", "user__nom", "user__prenom"]
     readonly_fields = [f.name for f in PaiementNita._meta.fields]
     ordering = ["-date_creation"]
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(RappelAbonnementEnvoye)
+class RappelAbonnementEnvoyeAdmin(admin.ModelAdmin):
+    """Journal — voir comptes/management/commands/envoyer_rappels_abonnement.py,
+    seul créateur de ces lignes (anti-doublon)."""
+
+    list_display = ["user", "seuil_jours", "date_expiration_visee", "date_envoi"]
+    list_filter = ["seuil_jours"]
+    search_fields = ["user__telephone", "user__nom", "user__prenom"]
+    readonly_fields = [f.name for f in RappelAbonnementEnvoye._meta.fields]
+    ordering = ["-date_envoi"]
 
     def has_add_permission(self, request) -> bool:
         return False

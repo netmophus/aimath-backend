@@ -243,3 +243,35 @@ NITA_TIMEOUT_SECONDES = config('NITA_TIMEOUT_SECONDES', default=20, cast=int)
 # Mode simulé (aucun appel réseau réel vers NITA, voir comptes/nita.py) —
 # UNIQUEMENT pour les tests locaux. JAMAIS à activer en production.
 NITA_MOCK = config('NITA_MOCK', default=False, cast=bool)
+
+# --- SMS LAM / LAMPUSH (voir comptes/sms.py) ------------------------------
+# Défauts VIDES uniquement (jamais une vraie valeur en dur).
+LAM_SMS_URL = config('LAM_SMS_URL', default='https://lamsms.lafricamobile.com/api')
+LAM_ACCOUNTID = config('LAM_ACCOUNTID', default='')
+LAM_PASSWORD = config('LAM_PASSWORD', default='')
+LAM_DEFAULT_SENDER = config('LAM_DEFAULT_SENDER', default='')
+# Mode simulé (aucun appel réseau réel vers LAM, logge le SMS à la place,
+# voir comptes/sms.py) — UNIQUEMENT pour les tests locaux, JAMAIS en
+# production. Distinct de NITA_MOCK (deux intégrations indépendantes).
+SMS_MOCK = config('SMS_MOCK', default=False, cast=bool)
+
+# Sans ceci, les logger.info()/logger.error() de comptes/sms.py (et
+# comptes/nita.py) n'atteignent nulle part : Python n'a par défaut qu'un
+# handler "de secours" sur stderr qui ne montre QUE WARNING et plus —
+# indispensable pour voir les envois SMS_MOCK/les échecs LAM en dev comme
+# en prod (logs Heroku). INFO en dev (DEBUG=True), WARNING seulement en
+# prod pour ne pas noyer les logs de routine.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler'},
+    },
+    'loggers': {
+        'comptes': {
+            'handlers': ['console'],
+            'level': 'INFO' if DEBUG else 'WARNING',
+            'propagate': False,
+        },
+    },
+}

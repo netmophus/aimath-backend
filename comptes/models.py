@@ -341,3 +341,40 @@ class PaiementNita(models.Model):
 
     def __str__(self) -> str:
         return f"{self.request_id} ({self.statut})"
+
+
+# ============================================================
+#  ANTI-DOUBLON DES RAPPELS D'EXPIRATION (voir comptes/management/commands/
+#  envoyer_rappels_abonnement.py) : une ligne = un rappel RÉELLEMENT envoyé
+#  (créée seulement APRÈS un envoi réussi, jamais avant — voir la commande)
+#  pour un (élève, seuil, échéance visée) donné. La contrainte d'unicité en
+#  base est un garde-fou supplémentaire, pas le seul mécanisme anti-doublon.
+# ============================================================
+
+class RappelAbonnementEnvoye(models.Model):
+    user = models.ForeignKey(
+        "comptes.User", on_delete=models.CASCADE, related_name="rappels_abonnement_envoyes",
+    )
+    # Nombre de jours avant l'échéance au moment de l'envoi (10/5/3/1).
+    seuil_jours = models.PositiveIntegerField("seuil (jours)")
+    # Date d'échéance VISÉE par ce rappel — pas juste "aujourd'hui" : si
+    # l'élève prolonge son abonnement entre deux rappels, une NOUVELLE
+    # échéance donne droit à de nouveaux rappels (ce n'est plus la même
+    # "campagne" d'expiration), sans quoi il ne recevrait plus jamais de
+    # rappel après en avoir reçu un pour une échéance déjà dépassée depuis.
+    date_expiration_visee = models.DateField("échéance visée")
+    date_envoi = models.DateTimeField("envoyé le", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "rappel d'abonnement envoyé"
+        verbose_name_plural = "rappels d'abonnement envoyés"
+        ordering = ["-date_envoi"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "seuil_jours", "date_expiration_visee"],
+                name="unique_rappel_abonnement_par_seuil_et_echeance",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"J-{self.seuil_jours} pour {self.user_id} (échéance {self.date_expiration_visee})"

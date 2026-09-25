@@ -21,11 +21,20 @@ from rest_framework.views import APIView
 
 from .models import CarteFahimta, User
 from .permissions import IsVendeurActif
+from .sms import envoyer_sms
 from .vendeur_serializers import (
     CarteVendeurSerializer,
     MoiVendeurSerializer,
     VendreCarteSerializer,
 )
+
+# Longueur au-delà de laquelle un SMS listant tous les codes en un seul
+# message serait trop long (~2 SMS concaténés) — passé ce seuil, on préfère
+# un SMS séparé par carte plutôt qu'un message géant tronqué/mal découpé
+# par l'opérateur. Choix délibéré (voir VendreCarteView) face à l'option
+# "toujours un SMS par carte" : pour une petite vente (2-5 cartes, le cas
+# courant), un seul SMS reste plus clair et moins coûteux en crédits.
+_LONGUEUR_MAX_SMS_GROUPE = 300
 
 MESSAGE_ELEVE_INTROUVABLE = (
     "Aucun élève trouvé avec ce numéro. L'élève doit d'abord créer un compte."
@@ -109,6 +118,31 @@ class VerifierEleveView(APIView):
         return Response({"prenom": eleve.prenom, "nom": eleve.nom})
 
 
+def _envoyer_sms_cartes_vendues(eleve: User, cartes: list[CarteFahimta]) -> None:
+    """Un seul SMS groupé si les codes tiennent dans une taille raisonnable
+    (cas courant, quelques cartes), sinon un SMS par carte — voir
+    _LONGUEUR_MAX_SMS_GROUPE. Ne renvoie rien : chaque envoi passe par
+    envoyer_sms(), qui ne lève jamais (voir comptes.sms)."""
+    if len(cartes) == 1:
+        carte = cartes[0]
+        envoyer_sms(
+            eleve.telephone,
+            f"Fahimta : tu as reçu une carte. Code : {carte.code}. Active-la sur myfahimta.com "
+            f"pour {carte.duree_jours} jours de cours.",
+        )
+        return
+
+    codes = ", ".join(carte.code for carte in cartes)
+    texte_groupe = f"Fahimta : tu as reçu {len(cartes)} cartes. Codes : {codes}. Active-les sur myfahimta.com."
+
+    if len(texte_groupe) <= _LONGUEUR_MAX_SMS_GROUPE:
+        envoyer_sms(eleve.telephone, texte_groupe)
+        return
+
+    for carte in cartes:
+        envoyer_sms(eleve.telephone, f"Fahimta : tu as reçu une carte. Code : {carte.code}. Active-la sur myfahimta.com.")
+
+
 class VendreCarteView(APIView):
     """
     POST /api/vendeur/vendre-carte/ — { "telephone_eleve": "...", "carte_ids": [N, ...] }
@@ -184,6 +218,11 @@ class VendreCarteView(APIView):
                 f"1 carte envoyée à {eleve.prenom} {eleve.nom}. "
                 "Il peut maintenant l'activer depuis son espace."
             )
+
+        # SMS à l'ÉLÈVE avec le(s) code(s) reçu(s) — APRÈS le commit de la
+        # vente (jamais dans le bloc atomique, jamais une condition du
+        # succès de la vente elle-même : envoyer_sms() ne lève jamais).
+        _envoyer_sms_cartes_vendues(eleve, cartes)
 
         return Response(
             {

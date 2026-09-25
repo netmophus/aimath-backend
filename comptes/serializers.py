@@ -169,7 +169,7 @@ class MeSerializer(serializers.ModelSerializer):
         fields = [
             "id", "telephone", "email", "prenom", "nom",
             "role", "statut", "niveau", "serie", "date_inscription",
-            "photo_url", "a_un_abonnement_actif",
+            "photo_url", "a_un_abonnement_actif", "abonnement_actif_jusqu_au",
         ]
         read_only_fields = fields
 
@@ -239,3 +239,14 @@ class ProfilEleveSerializer(serializers.ModelSerializer):
                 # 500 brute : converti en 400 DRF lisible par le front.
                 raise serializers.ValidationError({"photo": [str(exc)]})
         return instance
+
+
+# --- POST /api/eleve/activer-carte/ ---
+
+class ActiverCarteSerializer(serializers.Serializer):
+    """Juste la validation de forme (champ présent, non vide) — la logique
+    métier (code introuvable/déjà utilisé/valide) vit dans la vue, pas ici,
+    car elle a besoin d'un verrou transactionnel (select_for_update) que la
+    couche serializer n'est pas l'endroit pour poser."""
+
+    code = serializers.CharField(max_length=64, allow_blank=False)

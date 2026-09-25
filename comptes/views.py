@@ -1,12 +1,26 @@
+from datetime import timedelta
+
+from django.db import transaction
+from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from programme.models import Cycle
 
+from .cartes import (
+    enregistrer_echec,
+    formater_date_fr,
+    normaliser_code,
+    reinitialiser_echecs,
+    trop_de_tentatives,
+)
+from .models import CarteFahimta
 from .permissions import IsEleveActif
 from .serializers import (
+    ActiverCarteSerializer,
     CyclePublicSerializer,
     InscriptionEleveSerializer,
     MeSerializer,
@@ -95,3 +109,71 @@ class ProfilEleveView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class ActiverCarteView(APIView):
+    """
+    POST /api/eleve/activer-carte/ — { "code": "FH-XXXX-XXXX-XXXX" }
+
+    Crédite l'abonnement de l'élève connecté (request.user UNIQUEMENT —
+    jamais un id passé par le client) avec la durée de la carte. Transaction
+    atomique + select_for_update() sur la carte : deux activations
+    simultanées du même code ne peuvent pas toutes les deux réussir, la
+    seconde trouve la carte déjà "utilisee" une fois le verrou de la
+    première relâché.
+
+    Nouvelle date = max(aujourd'hui, échéance actuelle) + durée de la carte
+    — un abonnement déjà actif est PROLONGÉ, jamais raccourci ni remplacé.
+    """
+
+    permission_classes = [IsEleveActif]
+
+    def post(self, request):
+        user = request.user
+
+        if trop_de_tentatives(user):
+            return Response(
+                {"detail": "Trop de tentatives. Réessaie dans une heure."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        serializer = ActiverCarteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        code = normaliser_code(serializer.validated_data["code"])
+
+        with transaction.atomic():
+            carte = CarteFahimta.objects.select_for_update().filter(code=code).first()
+
+            if carte is None:
+                enregistrer_echec(user)
+                return Response({"detail": "Code invalide."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if carte.statut == CarteFahimta.Statut.UTILISEE:
+                enregistrer_echec(user)
+                return Response(
+                    {"detail": "Ce code a déjà été utilisé."}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            aujourdhui = timezone.localdate()
+            base = max(aujourdhui, user.abonnement_actif_jusqu_au or aujourdhui)
+            nouvelle_date = base + timedelta(days=carte.duree_jours)
+
+            user.abonnement_actif_jusqu_au = nouvelle_date
+            user.save(update_fields=["abonnement_actif_jusqu_au"])
+
+            carte.statut = CarteFahimta.Statut.UTILISEE
+            carte.utilisee_par = user
+            carte.date_activation = timezone.now()
+            carte.save(update_fields=["statut", "utilisee_par", "date_activation"])
+
+        reinitialiser_echecs(user)
+
+        return Response(
+            {
+                "message": (
+                    f"Abonnement activé ! Tu as accès à tous les cours "
+                    f"jusqu'au {formater_date_fr(nouvelle_date)}."
+                ),
+                "abonnement_actif_jusqu_au": nouvelle_date,
+            }
+        )

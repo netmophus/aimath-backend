@@ -184,3 +184,49 @@ class User(AbstractBaseUser, PermissionsMixin):
             self.abonnement_actif_jusqu_au is not None
             and self.abonnement_actif_jusqu_au >= timezone.localdate()
         )
+
+
+# ============================================================
+#  CARTES FAHIMTA : codes prépayés que l'élève active pour créditer
+#  son abonnement — voir comptes.cartes pour la génération/normalisation
+#  des codes et comptes.views.ActiverCarteView pour l'activation.
+# ============================================================
+
+class CarteFahimta(models.Model):
+    """Un code prépayé, généré par lot, à usage unique. Pas de péremption de
+    carte elle-même (valable indéfiniment tant que non activée) — seul
+    `duree_jours` détermine la durée d'abonnement CRÉDITÉE une fois activée."""
+
+    class Statut(models.TextChoices):
+        ACTIVE = "active", "Active"
+        UTILISEE = "utilisee", "Utilisée"
+
+    # Format "FH-XXXX-XXXX-XXXX" (voir comptes.cartes.generer_code_unique) —
+    # stocké tel quel, avec les tirets : c'est la forme canonique comparée
+    # à l'activation après normalisation de la saisie de l'élève.
+    code = models.CharField("code", max_length=17, unique=True, db_index=True)
+    duree_jours = models.PositiveIntegerField(
+        "durée (jours)", default=30,
+        help_text="Nombre de jours d'abonnement crédités à l'activation.",
+    )
+    statut = models.CharField(
+        "statut", max_length=10, choices=Statut.choices, default=Statut.ACTIVE
+    )
+    utilisee_par = models.ForeignKey(
+        "comptes.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="cartes_activees", verbose_name="activée par",
+    )
+    date_activation = models.DateTimeField("date d'activation", null=True, blank=True)
+    # Identifiant du lot de génération (ex. "lot-20260925-1030") — pas de FK
+    # vers un modèle Lot séparé : un simple texte indexé suffit pour filtrer/
+    # exporter un lot depuis l'admin, sans table supplémentaire à gérer.
+    lot = models.CharField("lot", max_length=64, db_index=True)
+    date_creation = models.DateTimeField("créée le", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "carte Fahimta"
+        verbose_name_plural = "cartes Fahimta"
+        ordering = ["-date_creation"]
+
+    def __str__(self) -> str:
+        return self.code

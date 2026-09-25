@@ -99,7 +99,7 @@ class LeconListeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lecon
         fields = [
-            "id", "titre", "statut", "notion", "chemin",
+            "id", "titre", "statut", "est_gratuit", "notion", "chemin",
             "nb_exercices", "nb_videos", "cree_le", "modifie_le",
         ]
 
@@ -130,7 +130,7 @@ class LeconDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lecon
         fields = [
-            "id", "titre", "statut",
+            "id", "titre", "statut", "est_gratuit",
             "notion",
             "histoire",
             "objectifs_pedagogiques",
@@ -177,7 +177,7 @@ class LeconEcritureSerializer(serializers.ModelSerializer):
             "prerequis_texte", "prerequis_lecons",
             "cours_redige", "demonstrations", "a_retenir",
             "sujet_examen",
-            "statut",
+            "statut", "est_gratuit",
             "exercices", "videos", "ressources",
         ]
 

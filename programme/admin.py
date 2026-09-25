@@ -91,8 +91,8 @@ class RessourceInline(admin.TabularInline):
 
 @admin.register(Lecon)
 class LeconAdmin(admin.ModelAdmin):
-    list_display = ['titre', 'notion', 'statut', 'modifie_le']
-    list_filter = ['statut']
+    list_display = ['titre', 'notion', 'statut', 'est_gratuit', 'modifie_le']
+    list_filter = ['statut', 'est_gratuit']
     search_fields = ['titre']
     filter_horizontal = ['prerequis_lecons']
     fields = [
@@ -101,7 +101,7 @@ class LeconAdmin(admin.ModelAdmin):
         'objectifs_pedagogiques',
         'prerequis_texte', 'prerequis_lecons',
         'cours_redige', 'demonstrations', 'a_retenir', 'sujet_examen',
-        'statut',
+        'statut', 'est_gratuit',
     ]
     inlines = [ExerciceInline, VideoInline, RessourceInline]
 

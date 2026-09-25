@@ -162,13 +162,14 @@ class MeSerializer(serializers.ModelSerializer):
     niveau = serializers.CharField(source="niveau.nom", default=None, read_only=True)
     serie = serializers.CharField(source="serie.nom", default=None, read_only=True)
     photo_url = serializers.SerializerMethodField(read_only=True)
+    a_un_abonnement_actif = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
         fields = [
             "id", "telephone", "email", "prenom", "nom",
             "role", "statut", "niveau", "serie", "date_inscription",
-            "photo_url",
+            "photo_url", "a_un_abonnement_actif",
         ]
         read_only_fields = fields
 

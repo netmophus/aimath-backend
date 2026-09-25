@@ -3,6 +3,7 @@ from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.core.validators import RegexValidator
 from django.db import models
+from django.utils import timezone
 
 telephone_validator = RegexValidator(
     regex=r"^\+227\d{8}$",
@@ -122,6 +123,17 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Remis à vide si le compte est ensuite approuvé.
     motif_rejet = models.TextField("motif du rejet", blank=True, null=True)
 
+    # --- Abonnement élève ("tout Fahimta", pas d'offre par matière) : une
+    # seule date de fin, pas de table séparée — suffisant tant qu'il n'existe
+    # qu'une formule unique. null = jamais abonné. Le PAIEMENT (carte NITA)
+    # n'est pas géré ici : cette date sera pour l'instant renseignée à la
+    # main en base le temps que l'activation par carte existe (voir
+    # programme.acces.eleve_peut_acceder pour l'usage de a_un_abonnement_actif).
+    abonnement_actif_jusqu_au = models.DateField(
+        "abonnement actif jusqu'au", blank=True, null=True,
+        help_text="Date de fin de l'abonnement en cours. Vide = jamais abonné.",
+    )
+
     # --- Profil élève enrichi (tous optionnels : ne casse aucun compte
     # existant) — modifiables par l'élève lui-même via ProfilEleveSerializer
     # (comptes/serializers.py), jamais par un paramètre arbitraire côté
@@ -162,3 +174,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     def save(self, *args, **kwargs):
         self.telephone = UserManager.normalize_telephone(self.telephone)
         super().save(*args, **kwargs)
+
+    @property
+    def a_un_abonnement_actif(self) -> bool:
+        """True si `abonnement_actif_jusqu_au` est renseignée et pas encore
+        dépassée (inclusive : le dernier jour compte). Utilisée par
+        programme.acces.eleve_peut_acceder — jamais recalculée ailleurs."""
+        return (
+            self.abonnement_actif_jusqu_au is not None
+            and self.abonnement_actif_jusqu_au >= timezone.localdate()
+        )

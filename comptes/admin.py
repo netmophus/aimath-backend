@@ -17,7 +17,7 @@ class UserAdmin(DjangoUserAdmin):
     add_form = UserCreationForm
 
     ordering = ["-date_inscription"]
-    list_display = ["prenom", "nom", "telephone", "role", "statut", "date_inscription"]
+    list_display = ["prenom", "nom", "telephone", "role", "statut", "abonnement_actif_jusqu_au", "date_inscription"]
     list_filter = ["role", "statut"]
     search_fields = ["telephone", "nom", "prenom", "email"]
 
@@ -26,6 +26,17 @@ class UserAdmin(DjangoUserAdmin):
         ("Informations personnelles", {"fields": ("prenom", "nom", "email")}),
         ("Scolarité (élèves)", {"fields": ("niveau", "serie")}),
         ("Rôle et statut", {"fields": ("role", "statut")}),
+        (
+            "Abonnement",
+            {
+                "fields": ("abonnement_actif_jusqu_au",),
+                "description": (
+                    "Le paiement par carte n'est pas encore automatisé : "
+                    "renseigner cette date active manuellement l'abonnement "
+                    "de l'élève jusqu'à cette échéance incluse."
+                ),
+            },
+        ),
         (
             "Permissions",
             {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")},

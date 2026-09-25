@@ -154,6 +154,15 @@ class Lecon(models.Model):
     # corrigés d'exercices (voir components/eleve/CarteCorrigeExamen.tsx).
     sujet_examen = models.TextField(blank=True, default="")  # Markdown + LaTeX
 
+    # Verrouillage premium : False (par défaut) = leçon réservée aux élèves
+    # abonnés (voir programme.acces.eleve_peut_acceder) ; True = accessible à
+    # tout élève, abonné ou non. Indépendant de `statut` : une leçon peut être
+    # Publiée+Premium, Publiée+Gratuite, etc.
+    est_gratuit = models.BooleanField(
+        "cours gratuit", default=False,
+        help_text="Accessible sans abonnement. Indépendant du statut de publication.",
+    )
+
     statut = models.CharField(
         max_length=20, choices=Statut.choices, default=Statut.BROUILLON
     )

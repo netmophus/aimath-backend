@@ -12,10 +12,8 @@ Django (CarteFahimtaAdmin, filtrable par lot).
 """
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
-from comptes.cartes import generer_code_unique
-from comptes.models import CarteFahimta
+from comptes.cartes import generer_lot
 
 
 class Command(BaseCommand):
@@ -35,7 +33,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         quantite = options["quantite"]
         duree_jours = options["duree_jours"]
-        lot = options["lot"] or f"lot-{timezone.now():%Y%m%d-%H%M%S}"
 
         if quantite <= 0:
             self.stderr.write(self.style.ERROR("--quantite doit être un entier positif."))
@@ -44,23 +41,13 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR("--duree-jours doit être un entier positif."))
             return
 
-        # Exclusion locale en plus de la vérification en base (voir
-        # generer_code_unique) : évite qu'un même code candidat, généré deux
-        # fois dans CE lot avant que le premier soit écrit en base, ne passe
-        # les deux la vérification d'existence (toujours "pas encore en
-        # base" au moment du 2e check) — quasi impossible vu l'espace de
-        # codes, mais gratuit à garantir ici.
-        codes_du_lot: set[str] = set()
-        cartes = []
-        for _ in range(quantite):
-            code = generer_code_unique(exclure=codes_du_lot)
-            codes_du_lot.add(code)
-            cartes.append(CarteFahimta(code=code, duree_jours=duree_jours, lot=lot))
-
-        CarteFahimta.objects.bulk_create(cartes)
+        # generer_lot() : MÊME fonction que l'endpoint admin du back-office
+        # custom (POST /api/admin/cartes/generer/) — la génération ne vit
+        # qu'à un seul endroit (voir comptes/cartes.py).
+        cartes = generer_lot(quantite=quantite, duree_jours=duree_jours, lot=options["lot"])
 
         self.stdout.write(self.style.SUCCESS(
-            f"\n{quantite} carte(s) créée(s) — lot \"{lot}\", {duree_jours} jour(s) chacune.\n"
+            f"\n{quantite} carte(s) créée(s) — lot \"{cartes[0].lot}\", {duree_jours} jour(s) chacune.\n"
         ))
         for carte in cartes:
             self.stdout.write(f"  {carte.code}")

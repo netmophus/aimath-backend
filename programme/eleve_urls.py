@@ -1,6 +1,6 @@
 from django.urls import path
 
-from comptes.views import ActiverCarteView, ProfilEleveView
+from comptes.views import ActiverCarteView, MesCartesEleveView, ProfilEleveView
 
 from .eleve_views import (
     LeconEleveDetailView,
@@ -24,4 +24,5 @@ urlpatterns = [
     # rester sous le même préfixe /api/eleve/ que le reste de cet espace.
     path("profil/", ProfilEleveView.as_view(), name="profil"),
     path("activer-carte/", ActiverCarteView.as_view(), name="activer-carte"),
+    path("mes-cartes/", MesCartesEleveView.as_view(), name="mes-cartes"),
 ]

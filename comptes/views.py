@@ -1,6 +1,8 @@
 from datetime import timedelta
 
 from django.db import transaction
+from django.db.models import Q
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -21,6 +23,7 @@ from .models import CarteFahimta
 from .permissions import IsEleveActif
 from .serializers import (
     ActiverCarteSerializer,
+    CarteRecueEleveSerializer,
     CyclePublicSerializer,
     InscriptionEleveSerializer,
     MeSerializer,
@@ -176,4 +179,36 @@ class ActiverCarteView(APIView):
                 ),
                 "abonnement_actif_jusqu_au": nouvelle_date,
             }
+        )
+
+
+class MesCartesEleveView(generics.ListAPIView):
+    """
+    GET /api/eleve/mes-cartes/ — TOUTES les cartes qui concernent l'élève
+    connecté (request.user UNIQUEMENT), code en clair (voir
+    CarteRecueEleveSerializer) : celles qu'un vendeur lui a attribuées
+    (attribuee_a, à activer ou déjà activées) ET celles qu'il a activées
+    lui-même sans être passé par un vendeur (utilisee_par seul — un code
+    acheté/obtenu autrement, sans attribuee_a jamais renseigné). Les deux
+    ensembles se recouvrent pour une carte vendue puis activée par ce même
+    élève (attribuee_a ET utilisee_par pointent alors vers lui) — le OR
+    évite un doublon dans ce cas.
+
+    Distinct de l'activation elle-même (ActiverCarteView ci-dessus) : cette
+    vue ne fait que LISTER, l'élève active ensuite en collant le code sur
+    /eleve/abonnement.
+    """
+
+    serializer_class = CarteRecueEleveSerializer
+    permission_classes = [IsEleveActif]
+
+    def get_queryset(self):
+        user = self.request.user
+        return (
+            CarteFahimta.objects.filter(Q(attribuee_a=user) | Q(utilisee_par=user))
+            # Une seule clé de tri, la plus pertinente en priorité : date
+            # d'activation si activée, sinon date d'attribution, sinon (cas
+            # limite théorique) date de création.
+            .annotate(date_tri=Coalesce("date_activation", "date_attribution", "date_creation"))
+            .order_by("-date_tri")
         )

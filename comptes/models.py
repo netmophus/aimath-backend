@@ -67,6 +67,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         ENSEIGNANT = "enseignant", "Enseignant"
         ADMIN = "admin", "Admin"
         PARTENAIRE = "partenaire", "Partenaire"
+        VENDEUR = "vendeur", "Vendeur"
 
     class Statut(models.TextChoices):
         EN_ATTENTE = "en_attente", "En attente"
@@ -132,6 +133,29 @@ class User(AbstractBaseUser, PermissionsMixin):
     abonnement_actif_jusqu_au = models.DateField(
         "abonnement actif jusqu'au", blank=True, null=True,
         help_text="Date de fin de l'abonnement en cours. Vide = jamais abonné.",
+    )
+
+    # --- Vendeur : commission FIXE par carte (en FCFA), utilisée seulement
+    # pour role=vendeur. Voir CarteFahimta.commission_figee : au moment où
+    # une carte est ASSIGNÉE à un vendeur, la valeur courante de ce champ y
+    # est recopiée ("figée") — modifier commission_fcfa ensuite ne change
+    # donc jamais la commission des cartes déjà assignées, seulement celle
+    # des futures assignations (voir comptes/admin_vendeurs_views.py).
+    commission_fcfa = models.PositiveIntegerField(
+        "commission (FCFA)", default=0,
+        help_text="Commission fixe par carte vendue — utilisée uniquement pour les vendeurs.",
+    )
+
+    # --- Adresse du vendeur (facultative), pour le suivi/traçabilité admin
+    # (voir comptes/admin_vendeurs_serializers.py). `ville` n'est PAS
+    # dupliqué ici : le champ existe déjà plus bas (profil élève enrichi) et
+    # son sens ("ville", sans plus de précision) est identique pour un
+    # vendeur — réutilisé tel quel. `quartier` et `ecole_ou_point_vente`
+    # sont propres au vendeur, jamais utilisés pour les autres rôles.
+    quartier = models.CharField("quartier", max_length=100, blank=True, null=True)
+    ecole_ou_point_vente = models.CharField(
+        "école ou point de vente", max_length=150, blank=True, null=True,
+        help_text="Repère physique du vendeur (école, boutique, marché…).",
     )
 
     # --- Profil élève enrichi (tous optionnels : ne casse aucun compte
@@ -222,6 +246,41 @@ class CarteFahimta(models.Model):
     # exporter un lot depuis l'admin, sans table supplémentaire à gérer.
     lot = models.CharField("lot", max_length=64, db_index=True)
     date_creation = models.DateTimeField("créée le", auto_now_add=True)
+
+    # --- Module vendeur (fondations — voir comptes/admin_vendeurs_views.py) :
+    # une carte est soit au STOCK CENTRAL (vendeur=None), soit ASSIGNÉE à un
+    # vendeur. `limit_choices_to` ne restreint que les formulaires (admin
+    # Django) — l'application réelle du rôle se fait côté vue (le queryset
+    # de vendeurs valides y est explicitement filtré sur role=vendeur).
+    vendeur = models.ForeignKey(
+        "comptes.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="cartes_assignees", verbose_name="vendeur",
+        limit_choices_to={"role": "vendeur"},
+    )
+    date_assignation = models.DateTimeField("date d'assignation", null=True, blank=True)
+    # Copie de User.commission_fcfa AU MOMENT de l'assignation — jamais
+    # recalculée ensuite : modifier la commission d'un vendeur ne doit
+    # jamais changer rétroactivement ce que rapportait une carte déjà en
+    # circulation (voir comptes/admin_vendeurs_views.py).
+    commission_figee = models.PositiveIntegerField(
+        "commission figée (FCFA)", null=True, blank=True,
+        help_text="Commission du vendeur au moment de l'assignation de cette carte.",
+    )
+
+    # --- Vente vendeur → élève (voir comptes/vendeur_views.py) : état
+    # intermédiaire entre "assignée à un vendeur" et "activée". Le statut
+    # reste ACTIVE tant que l'élève n'a pas lui-même activé le code (voir
+    # ActiverCarteView) — attribuee_a ne fait que retirer la carte du stock
+    # "disponible" du vendeur et la rendre visible (code en clair) côté
+    # élève. limit_choices_to ne restreint que les formulaires admin, comme
+    # pour `vendeur` ci-dessus — l'application réelle du rôle se fait dans
+    # VendreCarteView.
+    attribuee_a = models.ForeignKey(
+        "comptes.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="cartes_recues", verbose_name="attribuée à",
+        limit_choices_to={"role": "eleve"},
+    )
+    date_attribution = models.DateTimeField("date d'attribution", null=True, blank=True)
 
     class Meta:
         verbose_name = "carte Fahimta"

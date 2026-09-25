@@ -9,7 +9,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from programme.models import Cycle, Niveau, Serie
 
-from .models import User
+from .models import CarteFahimta, User
 
 TELEPHONE_RE = re.compile(r"^\+227\d{8}$")
 
@@ -250,3 +250,19 @@ class ActiverCarteSerializer(serializers.Serializer):
     couche serializer n'est pas l'endroit pour poser."""
 
     code = serializers.CharField(max_length=64, allow_blank=False)
+
+
+# --- GET /api/eleve/mes-cartes/ ---
+
+class CarteRecueEleveSerializer(serializers.ModelSerializer):
+    """Cartes qu'un VENDEUR a attribuées à l'élève connecté (voir
+    CarteFahimta.attribuee_a et comptes.vendeur_views.VendreCarteView) —
+    `code` EN CLAIR ici, contrairement à tous les serializers admin/vendeur :
+    c'est SA carte, elle lui appartient déjà (payée hors plateforme), il a
+    le droit de voir son propre code pour l'activer. Toujours filtré sur
+    request.user côté vue, jamais un id arbitraire."""
+
+    class Meta:
+        model = CarteFahimta
+        fields = ["id", "code", "statut", "duree_jours", "date_attribution", "date_activation"]
+        read_only_fields = fields

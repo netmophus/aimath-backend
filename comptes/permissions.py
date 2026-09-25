@@ -17,6 +17,26 @@ class IsAdminRole(BasePermission):
         return bool(user and user.is_authenticated and user.role == User.Role.ADMIN)
 
 
+class IsVendeurActif(BasePermission):
+    """
+    Autorise uniquement les vendeurs (User.Role.VENDEUR) au statut "actif" —
+    même garde qu'IsEleveActif, pour la même raison (double sécurité, ne
+    repose pas uniquement sur le fait que la connexion refuse déjà les
+    comptes non actifs).
+    """
+
+    message = "Réservé aux vendeurs actifs."
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and user.role == User.Role.VENDEUR
+            and user.statut == User.Statut.ACTIF
+        )
+
+
 class IsEleveActif(BasePermission):
     """
     Autorise uniquement les élèves (User.Role.ELEVE) au statut "actif".

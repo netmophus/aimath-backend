@@ -19,6 +19,7 @@ RÈGLES DE SÉCURITÉ (voir comptes/nita.py pour le détail) :
   jamais deux implémentations séparées du crédit.
 """
 
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -47,6 +48,8 @@ from .nita_serializers import (
 )
 from .permissions import IsAdminRole, IsEleveActif
 from .sms import envoyer_sms
+
+logger = logging.getLogger(__name__)
 
 
 def crediter_paiement_nita(paiement_id: int) -> bool:
@@ -131,11 +134,38 @@ class InitierPaiementNitaView(APIView):
                 telephone_nita=telephone_nita,
                 url_callback=url_callback,
             )
-        except NitaError as exc:
+        except NitaError:
+            # Le détail diagnostique complet (URL appelée, statut HTTP,
+            # corps de réponse NITA) est DÉJÀ loggé au point d'origine dans
+            # comptes/nita.py — logger.exception() ici ajoute la trace de
+            # la remontée jusqu'à cette vue, utile pour situer l'appel dans
+            # le flux (initier vs. callback vs. vérifier) au même endroit
+            # des logs Heroku.
+            logger.exception(
+                "Échec de l'initiation du paiement NITA (user_id=%s, request_id=%s)",
+                user.id, request_id,
+            )
             paiement.statut = PaiementNita.Statut.ECHOUE
             paiement.save(update_fields=["statut"])
             return Response(
-                {"detail": f"Impossible de démarrer le paiement NITA. {exc}"},
+                {"detail": "Paiement NITA indisponible. Réessaie dans quelques instants."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except Exception:
+            # Filet de sécurité : TOUTE exception inattendue (pas seulement
+            # NitaError — ex. un bug non prévu dans nita_creer_achat) est
+            # loggée avec sa trace complète PUIS convertie en réponse propre,
+            # au lieu de remonter telle quelle et devenir un 502 opaque côté
+            # client sans aucune trace exploitable côté serveur (c'est
+            # exactement le symptôme observé en prod qui a motivé cet ajout).
+            logger.exception(
+                "Erreur INATTENDUE lors de l'initiation du paiement NITA (user_id=%s, request_id=%s)",
+                user.id, request_id,
+            )
+            paiement.statut = PaiementNita.Statut.ECHOUE
+            paiement.save(update_fields=["statut"])
+            return Response(
+                {"detail": "Paiement NITA indisponible. Réessaie dans quelques instants."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -187,6 +217,10 @@ class NitaCallbackView(APIView):
                 telephone_nita=telephone_nita,
             )
         except NitaError as exc:
+            # Détail complet déjà loggé dans comptes/nita.py au point
+            # d'origine — un simple warning ici suffit à situer QUEL
+            # paiement est concerné dans les logs.
+            logger.warning("Callback NITA : vérification impossible pour request_id=%s : %s", request_id, exc)
             # Le webhook a un requestId valide mais la ré-vérification
             # échoue (NITA injoignable côté vérif) : on ne crédite PAS, le
             # paiement reste en_attente — "vérifier maintenant" ou un
@@ -244,6 +278,10 @@ class VerifierPaiementNitaView(APIView):
                 telephone_nita=telephone_nita,
             )
         except NitaError as exc:
+            logger.warning(
+                "Vérification manuelle NITA impossible (user_id=%s, request_id=%s) : %s",
+                request.user.id, request_id, exc,
+            )
             return Response(
                 {"detail": f"NITA injoignable pour l'instant. Réessaie dans quelques secondes. ({exc})"},
                 status=status.HTTP_502_BAD_GATEWAY,

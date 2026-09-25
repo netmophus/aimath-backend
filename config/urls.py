@@ -27,4 +27,7 @@ urlpatterns = [
     path('api/admin/ia/', include('programme.ia_urls')),
     path('api/eleve/', include('programme.eleve_urls')),
     path('api/vendeur/', include('comptes.vendeur_urls')),
+    # PUBLIC (webhook NITA, voir comptes.nita_views.NitaCallbackView) —
+    # préfixe séparé de /api/eleve/, jamais protégé par IsEleveActif.
+    path('api/nita/', include('comptes.nita_urls')),
 ]

@@ -289,3 +289,55 @@ class CarteFahimta(models.Model):
 
     def __str__(self) -> str:
         return self.code
+
+
+# ============================================================
+#  PAIEMENT NITA : second moyen (avec les cartes Fahimta) de créditer
+#  abonnement_actif_jusqu_au — voir comptes.nita pour le client HTTP NITA
+#  (auth/achat/vérification, mode simulé NITA_MOCK) et comptes.nita_views
+#  pour le flux complet (initier / callback / vérifier), avec sa
+#  ré-vérification serveur systématique et son idempotence stricte.
+# ============================================================
+
+class PaiementNita(models.Model):
+    """Une tentative de paiement NITA, du clic "Payer" jusqu'à confirmation
+    (ou échec). `request_id` est LA clé de suivi côté Fahimta (généré ici,
+    envoyé à NITA, renvoyé tel quel par son callback) ; `reference_nita` est
+    LA référence que l'élève doit indiquer dans MYNITA — connue seulement
+    une fois l'achat créé côté NITA (nullable jusque-là, voir
+    comptes.nita_views.InitierPaiementNitaView)."""
+
+    class Statut(models.TextChoices):
+        EN_ATTENTE = "en_attente", "En attente"
+        CONFIRME = "confirme", "Confirmé"
+        ECHOUE = "echoue", "Échoué"
+
+    user = models.ForeignKey(
+        "comptes.User", on_delete=models.CASCADE, related_name="paiements_nita",
+        limit_choices_to={"role": "eleve"},
+    )
+    # Copié depuis user.telephone au moment de l'initiation (pas juste une
+    # FK) : garde une trace même si le téléphone du compte change ensuite,
+    # et évite un aller-retour supplémentaire vers `user` pour la
+    # normalisation NITA (voir comptes.nita.normaliser_telephone_nita).
+    telephone = models.CharField("téléphone", max_length=20)
+    montant = models.PositiveIntegerField("montant (FCFA)")
+    duree_jours = models.PositiveIntegerField("durée (jours)")
+    request_id = models.CharField("request ID", max_length=64, unique=True, db_index=True)
+    reference_nita = models.CharField(
+        "référence NITA", max_length=64, null=True, blank=True,
+        help_text="Connue seulement après la création de l'achat côté NITA.",
+    )
+    statut = models.CharField(
+        "statut", max_length=12, choices=Statut.choices, default=Statut.EN_ATTENTE,
+    )
+    date_creation = models.DateTimeField("créé le", auto_now_add=True)
+    date_confirmation = models.DateTimeField("confirmé le", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "paiement NITA"
+        verbose_name_plural = "paiements NITA"
+        ordering = ["-date_creation"]
+
+    def __str__(self) -> str:
+        return f"{self.request_id} ({self.statut})"

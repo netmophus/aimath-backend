@@ -230,3 +230,16 @@ ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 # Notion de la leçon 13 ("Fonction logarithme népérien"), leçon MODÈLE
 # utilisée en few-shot dans les prompts de génération (voir programme/ia/prompts.py).
 IA_NOTION_MODELE_ID = config('IA_NOTION_MODELE_ID', default=49, cast=int)
+
+# --- Paiement NITA (voir comptes/nita.py, comptes/nita_views.py) ---------
+# Défauts VIDES uniquement (jamais une vraie valeur en dur) : un appel réel
+# sans configuration échoue proprement via NitaError plutôt que d'utiliser
+# une clé secrète codée en dur.
+NITA_BASE_URL = config('NITA_BASE_URL', default='')
+NITA_API_KEY = config('NITA_API_KEY', default='')
+NITA_USERNAME = config('NITA_USERNAME', default='')
+NITA_PASSWORD = config('NITA_PASSWORD', default='')
+NITA_TIMEOUT_SECONDES = config('NITA_TIMEOUT_SECONDES', default=20, cast=int)
+# Mode simulé (aucun appel réseau réel vers NITA, voir comptes/nita.py) —
+# UNIQUEMENT pour les tests locaux. JAMAIS à activer en production.
+NITA_MOCK = config('NITA_MOCK', default=False, cast=bool)

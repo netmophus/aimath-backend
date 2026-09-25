@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from .cartes import code_masque, reponse_csv_cartes
 from .forms import UserChangeForm, UserCreationForm
-from .models import CarteFahimta, User
+from .models import CarteFahimta, PaiementNita, User
 
 
 @admin.register(User)
@@ -138,3 +138,25 @@ class CarteFahimtaAdmin(admin.ModelAdmin):
     @admin.action(description="Exporter les codes du lot sélectionné (CSV)")
     def exporter_csv(self, request, queryset):
         return reponse_csv_cartes(queryset.order_by("code"))
+
+
+@admin.register(PaiementNita)
+class PaiementNitaAdmin(admin.ModelAdmin):
+    """Consultation/suivi — jamais créé ni modifié depuis l'admin (le cycle
+    de vie complet passe par comptes/nita_views.py, avec sa ré-vérification
+    et son idempotence, jamais reproductible correctement à la main ici)."""
+
+    list_display = [
+        "request_id", "user", "montant", "duree_jours", "statut",
+        "reference_nita", "date_creation", "date_confirmation",
+    ]
+    list_filter = ["statut"]
+    search_fields = ["request_id", "reference_nita", "telephone", "user__telephone", "user__nom", "user__prenom"]
+    readonly_fields = [f.name for f in PaiementNita._meta.fields]
+    ordering = ["-date_creation"]
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False

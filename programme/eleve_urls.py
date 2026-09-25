@@ -1,5 +1,6 @@
 from django.urls import path
 
+from comptes.nita_views import InitierPaiementNitaView, VerifierPaiementNitaView
 from comptes.views import ActiverCarteView, MesCartesEleveView, ProfilEleveView
 
 from .eleve_views import (
@@ -25,4 +26,7 @@ urlpatterns = [
     path("profil/", ProfilEleveView.as_view(), name="profil"),
     path("activer-carte/", ActiverCarteView.as_view(), name="activer-carte"),
     path("mes-cartes/", MesCartesEleveView.as_view(), name="mes-cartes"),
+    # Idem : défini dans comptes/nita_views.py (paiement NITA), exposé ici.
+    path("nita/initier/", InitierPaiementNitaView.as_view(), name="nita-initier"),
+    path("nita/verifier/", VerifierPaiementNitaView.as_view(), name="nita-verifier"),
 ]

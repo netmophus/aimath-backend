@@ -1,23 +1,31 @@
 """
-Client SMS LAM (L'Africa Mobile / LAMPUSH). Inspiré de l'intégration aimath
-(utils/sendSMS.js, Node) DONT LE FORMAT A ÉTÉ VÉRIFIÉ DIRECTEMENT dans le
-code source avant d'écrire ce module — pas seulement supposé depuis la
-consigne. Deux écarts par rapport à ce qui était attendu au départ,
-confirmés en lisant sendSMS.js :
+Client SMS LAM (L'Africa Mobile / LAMPUSH).
 
-1. Authentification : LAM utilise du HTTP BASIC AUTH (username/password),
-   PAS des champs `accountid`/`password` dans le corps JSON. On garde les
-   noms de variables d'env demandés (LAM_ACCOUNTID/LAM_PASSWORD) mais on les
-   passe en Basic Auth — c'est ce qui fonctionne réellement côté aimath.
-2. Champs du corps JSON : `to`, `from` (PAS `sender`), `content` (PAS
-   `text`), plus 3 champs d'accusé de réception (`dlr`, `dlr-level`,
-   `dlr-method`, `dlr-url`) repris tels quels — jamais observés comme
-   optionnels dans l'intégration source, donc conservés par prudence.
-3. Format du numéro pour `to` : "227XXXXXXXX" — SANS "+" ni "00" (voir
-   normaliser_telephone_sms ci-dessous), pas "+227XXXXXXXX" comme supposé
-   initialement. Confirmé via comptes.paymentController.phoneForSMS côté
-   aimath. À ne JAMAIS confondre avec comptes.nita.normaliser_telephone_nita,
-   qui produit un format différent ("00227XXXXXXXX") pour une API différente.
+HISTORIQUE IMPORTANT (pour ne pas refaire la même erreur) : la première
+version de ce module reproduisait fidèlement utils/sendSMS.js d'aimath
+(Basic Auth pour accountid/password, jamais dans le corps JSON) — mais ça
+échouait en prod avec "Parameter accountid is required !" renvoyé par LAM.
+Vérifié depuis contre la DOC OFFICIELLE LAM actuelle
+(developers.lafricamobile.com/docs/sms/endpoint/send-via-JSON) : LAM
+authentifie via des PARAMÈTRES DU CORPS JSON (`accountid`, `password`),
+PAS via HTTP Basic Auth. L'intégration aimath dont on s'inspirait n'avait
+apparemment jamais été vérifiée avec un vrai compte (son échec, comme le
+nôtre, est avalé en silence par un try/catch générique) — ne plus lui faire
+confiance aveuglément sur ce point précis.
+
+Champs du corps JSON envoyés (les DEUX conventions de nommage, pour
+maximiser la compatibilité en un seul essai — LAM ignore sans broncher un
+champ qu'il ne reconnaît pas) :
+- `accountid` / `password` : la doc officielle (obligatoires, voir ci-dessus).
+- `sender` / `text` : noms documentés officiellement.
+- `from` / `content` : noms utilisés par aimath — gardés en plus, au cas où
+  le compte/la version d'API validerait ceux-là plutôt que sender/text.
+- `to`, `dlr`, `dlr-level`, `dlr-method`, `dlr-url` : inchangés, l'erreur
+  observée ne les concernait pas.
+- Format du numéro pour `to` : "227XXXXXXXX" — SANS "+" ni "00" (voir
+  normaliser_telephone_sms ci-dessous). À ne JAMAIS confondre avec
+  comptes.nita.normaliser_telephone_nita, qui produit un format différent
+  ("00227XXXXXXXX") pour une API différente.
 
 RÈGLE ABSOLUE (comme comptes/nita.py) : envoyer_sms() ne lève JAMAIS
 d'exception — un SMS est un bonus, jamais une condition de succès d'une
@@ -84,19 +92,38 @@ def envoyer_sms(telephone: str, texte: str) -> bool:
         return False
 
     payload = {
-        "to": to,
+        # Authentification LAM (doc officielle : dans le corps, PAS Basic Auth).
+        "accountid": settings.LAM_ACCOUNTID,
+        "password": settings.LAM_PASSWORD,
+        # Deux conventions de nommage pour l'expéditeur/le texte (voir
+        # docstring de module) — LAM ignore un champ qu'il ne reconnaît pas.
+        "sender": settings.LAM_DEFAULT_SENDER,
+        "text": texte,
         "from": settings.LAM_DEFAULT_SENDER,
         "content": texte,
+        "to": to,
         "dlr": "yes",
         "dlr-level": 3,
         "dlr-method": "GET",
         "dlr-url": _DLR_URL,
     }
 
+    # LOG TEMPORAIRE (WARNING) — à retirer/repasser en INFO une fois l'envoi
+    # confirmé fonctionnel : les NOMS des champs envoyés (jamais leurs
+    # valeurs, ni le mot de passe ni la clé/l'accountid) + l'URL, pour
+    # confirmer ce qui part réellement vers LAM.
+    logger.warning(
+        "SMS → POST %s avec les champs (noms uniquement, jamais les valeurs) : %s "
+        "[Basic Auth également envoyé, conservé par prudence]",
+        settings.LAM_SMS_URL, sorted(payload.keys()),
+    )
+
     try:
         reponse = requests.post(
             settings.LAM_SMS_URL,
             json=payload,
+            # Gardé en plus du body (voir docstring) : ne peut pas nuire si
+            # LAM l'ignore, pourrait aider si le compte le valide malgré tout.
             auth=(settings.LAM_ACCOUNTID, settings.LAM_PASSWORD),
             headers={"Content-Type": "application/json"},
             timeout=TIMEOUT_SECONDES,

@@ -25,6 +25,7 @@ from .sms import envoyer_sms
 from .serializers import (
     ActiverCarteSerializer,
     CarteRecueEleveSerializer,
+    ChangerMotDePasseSerializer,
     CyclePublicSerializer,
     InscriptionEleveSerializer,
     MeSerializer,
@@ -95,6 +96,30 @@ class MeView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class ChangerMotDePasseView(APIView):
+    """
+    POST /api/auth/changer-mot-de-passe/ — { "nouveau_mot_de_passe" }
+
+    Ouvert à tout utilisateur authentifié, quel que soit son rôle ou son
+    statut (pas IsEleveActif) : il doit rester joignable pendant le
+    changement forcé qui suit une réinitialisation. Agit TOUJOURS sur
+    request.user. Lève le drapeau doit_changer_mdp.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangerMotDePasseSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user
+        user.set_password(serializer.validated_data["nouveau_mot_de_passe"])
+        user.doit_changer_mdp = False
+        user.save(update_fields=["password", "doit_changer_mdp"])
+
+        return Response({"message": "Mot de passe modifié."})
 
 
 class ProfilEleveView(generics.RetrieveUpdateAPIView):

@@ -157,7 +157,7 @@ class ProgrammeWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Programme
-        fields = ["id", "matiere", "niveau", "serie"]
+        fields = ["id", "matiere", "niveau", "serie", "presentation"]
 
     def validate(self, attrs):
         niveau = attrs.get("niveau") or (self.instance.niveau if self.instance else None)
@@ -214,7 +214,7 @@ class ProgrammeDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Programme
-        fields = ["id", "matiere", "niveau", "serie", "libelle", "themes"]
+        fields = ["id", "matiere", "niveau", "serie", "libelle", "presentation", "themes"]
 
     def get_matiere(self, obj: Programme) -> dict:
         return {"id": obj.matiere_id, "nom": obj.matiere.nom}

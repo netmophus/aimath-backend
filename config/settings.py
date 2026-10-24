@@ -227,6 +227,57 @@ IA_TIMEOUT_SECONDES = config('IA_TIMEOUT_SECONDES', default=180, cast=int)
 IA_MAX_TOKENS_REPONSE = config('IA_MAX_TOKENS_REPONSE', default=16000, cast=int)
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 
+# --- Lecture/analyse des exercices déposés (programme.lecture_exercice) ----
+# DÉSACTIVÉE PAR DÉFAUT : chaque analyse est un appel Anthropic facturé, avec
+# images/PDF. IA_LECTURE_DEV_SEULEMENT (vrai par défaut) la restreint en plus
+# à DEBUG=True : même avec IA_LECTURE_ACTIVE=True, rien ne part tant que le
+# serveur n'est pas en mode développement. Pour ouvrir à tous les élèves plus
+# tard : IA_LECTURE_ACTIVE=True ET IA_LECTURE_DEV_SEULEMENT=False.
+IA_LECTURE_ACTIVE = config('IA_LECTURE_ACTIVE', default=False, cast=bool)
+IA_LECTURE_DEV_SEULEMENT = config('IA_LECTURE_DEV_SEULEMENT', default=True, cast=bool)
+# Vide = réutilise IA_MODELE (le modèle doit accepter images et PDF).
+IA_LECTURE_MODELE = config('IA_LECTURE_MODELE', default='')
+IA_LECTURE_MAX_TOKENS = config('IA_LECTURE_MAX_TOKENS', default=8000, cast=int)
+IA_LECTURE_TIMEOUT_SECONDES = config('IA_LECTURE_TIMEOUT_SECONDES', default=120, cast=int)
+# Durée de conservation de l'ANALYSE (texte) pour ne pas refacturer un même
+# exercice renvoyé (double clic, nouvelle tentative). Les photos ne sont jamais gardées.
+IA_LECTURE_CACHE_SECONDES = config('IA_LECTURE_CACHE_SECONDES', default=3600, cast=int)
+
+# --- Correction complète des exercices de maths (programme.correction) ----
+# DÉSACTIVÉE PAR DÉFAUT : chaque correction est un appel Anthropic facturé,
+# suivi (au plus) de requêtes Wolfram Alpha. Même règle que la lecture :
+# IA_CORRECTION_DEV_SEULEMENT (vrai par défaut) exige DEBUG=True.
+IA_CORRECTION_ACTIVE = config('IA_CORRECTION_ACTIVE', default=False, cast=bool)
+IA_CORRECTION_DEV_SEULEMENT = config('IA_CORRECTION_DEV_SEULEMENT', default=True, cast=bool)
+IA_CORRECTION_MODELE = config('IA_CORRECTION_MODELE', default='')  # vide = IA_MODELE
+IA_CORRECTION_MAX_TOKENS = config('IA_CORRECTION_MAX_TOKENS', default=12000, cast=int)
+IA_CORRECTION_TIMEOUT_SECONDES = config('IA_CORRECTION_TIMEOUT_SECONDES', default=180, cast=int)
+IA_CORRECTION_CACHE_SECONDES = config('IA_CORRECTION_CACHE_SECONDES', default=3600, cast=int)
+# --- Simulations interactives GeoGebra dans la correction (étape 9.1) ----
+# DÉSACTIVÉES PAR DÉFAUT et réservées au développement local tant que la licence commerciale GeoGebra n'est
+# pas finalisée : SIMULATIONS_DEV_SEULEMENT (vrai par défaut) exige DEBUG=True. Aucune IA n'est appelée.
+SIMULATIONS_ACTIVES = config('SIMULATIONS_ACTIVES', default=False, cast=bool)
+SIMULATIONS_DEV_SEULEMENT = config('SIMULATIONS_DEV_SEULEMENT', default=True, cast=bool)
+# App ID Wolfram Alpha (vide = le contrôle Wolfram est ignoré, SymPy reste utilisé).
+WOLFRAM_APP_ID = config('WOLFRAM_APP_ID', default='')
+WOLFRAM_TIMEOUT_SECONDES = config('WOLFRAM_TIMEOUT_SECONDES', default=20, cast=int)
+
+# --- Professeur particulier IA (programme.professeur) ----------------------
+# DÉSACTIVÉ PAR DÉFAUT, même règle que la lecture et la correction : réservé
+# à DEBUG=True tant que IA_PROF_DEV_SEULEMENT est vrai. Les séances sont
+# TEMPORAIRES (cache Django, expiration IA_PROF_SEANCE_SECONDES), jamais en base.
+IA_PROF_ACTIVE = config('IA_PROF_ACTIVE', default=False, cast=bool)
+IA_PROF_DEV_SEULEMENT = config('IA_PROF_DEV_SEULEMENT', default=True, cast=bool)
+IA_PROF_MODELE = config('IA_PROF_MODELE', default='')  # vide = IA_MODELE
+IA_PROF_MAX_TOKENS_PLAN = config('IA_PROF_MAX_TOKENS_PLAN', default=14000, cast=int)
+IA_PROF_MAX_TOKENS_TOUR = config('IA_PROF_MAX_TOKENS_TOUR', default=1200, cast=int)
+IA_PROF_TIMEOUT_SECONDES = config('IA_PROF_TIMEOUT_SECONDES', default=150, cast=int)
+IA_PROF_SEANCE_SECONDES = config('IA_PROF_SEANCE_SECONDES', default=7200, cast=int)
+IA_PROF_PLAN_CACHE_SECONDES = config('IA_PROF_PLAN_CACHE_SECONDES', default=3600, cast=int)
+IA_PROF_MAX_APPELS_IA = config('IA_PROF_MAX_APPELS_IA', default=40, cast=int)       # par séance
+IA_PROF_MAX_ECHANGES = config('IA_PROF_MAX_ECHANGES', default=80, cast=int)         # actions de l'élève par séance
+IA_PROF_MAX_SEANCES_PAR_HEURE = config('IA_PROF_MAX_SEANCES_PAR_HEURE', default=6, cast=int)  # par élève
+
 # Notion de la leçon 13 ("Fonction logarithme népérien"), leçon MODÈLE
 # utilisée en few-shot dans les prompts de génération (voir programme/ia/prompts.py).
 IA_NOTION_MODELE_ID = config('IA_NOTION_MODELE_ID', default=49, cast=int)
@@ -274,4 +325,4 @@ LOGGING = {
             'propagate': False,
         },
     },
-}
+}

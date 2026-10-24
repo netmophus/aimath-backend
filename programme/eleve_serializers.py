@@ -115,7 +115,7 @@ class ProgrammeDetailEleveSerializer(InfosProgrammeMixin, serializers.ModelSeria
 
     class Meta:
         model = Programme
-        fields = ["id", "matiere", "niveau", "serie", "libelle", "themes"]
+        fields = ["id", "matiere", "niveau", "serie", "libelle", "presentation", "themes"]
 
 
 # --- GET /api/eleve/lecons/{id}/ : contenu complet d'une leçon publiée ---

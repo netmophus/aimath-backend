@@ -147,6 +147,7 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
         data["prenom"] = user.prenom
         data["nom"] = user.nom
         data["statut"] = user.statut
+        data["doit_changer_mdp"] = user.doit_changer_mdp
         data["niveau"] = {"id": user.niveau_id, "nom": user.niveau.nom} if user.niveau_id else None
         data["serie"] = {"id": user.serie_id, "nom": user.serie.nom} if user.serie_id else None
 
@@ -170,6 +171,7 @@ class MeSerializer(serializers.ModelSerializer):
             "id", "telephone", "email", "prenom", "nom",
             "role", "statut", "niveau", "serie", "date_inscription",
             "photo_url", "a_un_abonnement_actif", "abonnement_actif_jusqu_au",
+            "doit_changer_mdp",
         ]
         read_only_fields = fields
 
@@ -266,3 +268,22 @@ class CarteRecueEleveSerializer(serializers.ModelSerializer):
         model = CarteFahimta
         fields = ["id", "code", "statut", "duree_jours", "date_attribution", "date_activation"]
         read_only_fields = fields
+
+
+class ChangerMotDePasseSerializer(serializers.Serializer):
+    """POST /api/auth/changer-mot-de-passe/ — l'ancien mot de passe n'est
+    volontairement pas demandé : ce flux sert après une réinitialisation par
+    un admin, où l'utilisateur ne connaît que le mot de passe reçu par SMS
+    (déjà prouvé par la connexion qui vient d'avoir lieu)."""
+
+    nouveau_mot_de_passe = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_nouveau_mot_de_passe(self, value: str) -> str:
+        utilisateur = self.context["request"].user
+        if utilisateur.check_password(value):
+            raise serializers.ValidationError("Le nouveau mot de passe doit être différent de l'actuel.")
+        try:
+            validate_password(value, user=utilisateur)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value

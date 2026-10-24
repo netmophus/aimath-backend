@@ -64,6 +64,10 @@ class Programme(models.Model):
         Serie, on_delete=models.PROTECT, related_name='programmes',
         null=True, blank=True   # null pour le premier cycle sans série
     )
+    presentation = models.TextField(
+        blank=True, default="",
+        help_text="Présentation du programme (markdown), ouverte depuis le bouton côté élève",
+    )
 
     class Meta:
         unique_together = ['matiere', 'niveau', 'serie']

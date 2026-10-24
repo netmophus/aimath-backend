@@ -13,7 +13,9 @@ from .admin_serializers import (
     RejeterCompteSerializer,
 )
 from .models import User
+from .mot_de_passe import generer_mot_de_passe
 from .permissions import IsAdminRole
+from .sms import envoyer_sms
 
 
 class AdminCompteViewSet(
@@ -84,6 +86,37 @@ class AdminCompteViewSet(
             )
 
         return queryset
+
+    @action(detail=True, methods=["post"], url_path="reinitialiser-mot-de-passe")
+    def reinitialiser_mot_de_passe(self, request, pk=None):
+        """
+        Génère un mot de passe aléatoire, l'applique, force son changement à
+        la prochaine connexion et l'envoie PAR SMS uniquement — il n'apparaît
+        jamais dans la réponse. Le SMS ne bloque jamais l'action (envoyer_sms
+        ne lève pas) : `sms_envoye` indique si LAM l'a accepté ; sinon l'admin
+        peut simplement relancer la réinitialisation.
+        """
+        compte = self.get_object()
+
+        if compte.pk == request.user.pk:
+            return Response(
+                {"detail": "Tu ne peux pas réinitialiser ton propre mot de passe depuis ici."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        nouveau = generer_mot_de_passe()
+        compte.set_password(nouveau)
+        compte.doit_changer_mdp = True
+        compte.save(update_fields=["password", "doit_changer_mdp"])
+
+        sms_envoye = envoyer_sms(
+            compte.telephone,
+            "FAHIMTA : votre mot de passe a ete reinitialise. "
+            f"Nouveau mot de passe : {nouveau}. "
+            "Vous devrez le changer a la prochaine connexion.",
+        )
+
+        return Response({"detail": "Mot de passe réinitialisé.", "sms_envoye": sms_envoye})
 
     @action(detail=True, methods=["post"])
     def approuver(self, request, pk=None):

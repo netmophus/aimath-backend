@@ -11,6 +11,10 @@ from .eleve_views import (
     TermeGlossaireEleveDetailView,
     TermeGlossaireEleveListeView,
 )
+from .correction_views import CorrectionExerciceView
+from .professeur_views import (ExplicationView, IndiceView, ReponseView, SeanceDetailView, SeancesView,
+                               SolutionView, SuivanteView)
+from .exercice_views import DepotExerciceView
 
 app_name = "eleve"
 
@@ -19,6 +23,18 @@ urlpatterns = [
     path("programmes/<int:id>/", ProgrammeDetailEleveView.as_view(), name="programme-detail"),
     path("lecons/<int:id>/", LeconEleveDetailView.as_view(), name="lecon-detail"),
     path("mes-lecons/", MesLeconsView.as_view(), name="mes-lecons"),
+    # Réception + validation seule d'un exercice déposé (voir exercice_views.py).
+    path("resoudre/", DepotExerciceView.as_view(), name="resoudre"),
+    # Correction complète (maths, pilote) d'un énoncé confirmé : voir correction_views.py.
+    path("correction/", CorrectionExerciceView.as_view(), name="correction"),
+    # Professeur particulier IA (maths, pilote) : séances temporaires, voir professeur_views.py.
+    path("professeur/seances/", SeancesView.as_view(), name="professeur-seances"),
+    path("professeur/seances/<str:id>/", SeanceDetailView.as_view(), name="professeur-seance"),
+    path("professeur/seances/<str:id>/reponse/", ReponseView.as_view(), name="professeur-reponse"),
+    path("professeur/seances/<str:id>/indice/", IndiceView.as_view(), name="professeur-indice"),
+    path("professeur/seances/<str:id>/explication/", ExplicationView.as_view(), name="professeur-explication"),
+    path("professeur/seances/<str:id>/solution/", SolutionView.as_view(), name="professeur-solution"),
+    path("professeur/seances/<str:id>/suivante/", SuivanteView.as_view(), name="professeur-suivante"),
     path("glossaire/", TermeGlossaireEleveListeView.as_view(), name="glossaire-liste"),
     path("glossaire/<slug:slug>/", TermeGlossaireEleveDetailView.as_view(), name="glossaire-detail"),
     # Défini dans comptes/ (porte sur le modèle User), exposé ici pour

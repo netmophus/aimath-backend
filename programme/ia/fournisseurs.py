@@ -80,15 +80,21 @@ def _appeler_anthropic(system_prompt: str, user_prompt: str, *, max_tokens: int)
         ) from exc
 
     modele = settings.IA_MODELE
-    client = anthropic.Anthropic(api_key=cle, timeout=float(settings.IA_TIMEOUT_SECONDES))
+    client = anthropic.Anthropic(api_key=cle, timeout=float(settings.IA_TIMEOUT_SECONDES), max_retries=0)
 
+    # Budget commun : la génération de contenu (admin) compte dans le même plafond mensuel.
+    from budget_ia import service as budget
+    op = budget.ouvrir(
+        fonctionnalite="contenu_admin", modele=modele, tokens_sortie_max=max_tokens,
+        tokens_entree=budget.estimer_entree(message=user_prompt, systeme=system_prompt),
+    )
     try:
-        reponse = client.messages.create(
+        reponse = budget.appeler_sdk(op, lambda: client.messages.create(
             model=modele,
             max_tokens=max_tokens,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
-        )
+        ))
     except anthropic.AuthenticationError as exc:
         raise IAConfigurationInvalide(
             "Clé API Anthropic refusée par le fournisseur (vérifie ANTHROPIC_API_KEY)."

@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from django.conf import settings
 from django.core.cache import cache
 
+from budget_ia import service as budget
+
 from ..ia.exceptions import IAErreur
 from ..lecture_exercice import ContexteProgramme, cle_matiere, normaliser_analyse
 from ..simulations.selection import question_confirmee, sources_enonce
@@ -73,7 +75,7 @@ class ResultatCorrection:
 
 
 def correction_activee() -> bool:
-    if not settings.IA_CORRECTION_ACTIVE:
+    if not settings.IA_INTERRUPTEUR_GLOBAL or not settings.IA_CORRECTION_ACTIVE:
         return False
     if settings.IA_CORRECTION_DEV_SEULEMENT and not settings.DEBUG:
         return False
@@ -281,7 +283,10 @@ def corriger_exercice(
     try:
         modele = settings.IA_CORRECTION_MODELE or settings.IA_MODELE
         message = resolution.construire_message(analyse, f"{contexte.matiere}, {contexte.classe}")
-        brut, usage = resolution._appeler_anthropic(modele=modele, message=message)
+        # Budget : l'exercice est celui dont l'analyse provient (lecture), sinon un nouvel exercice.
+        exercice = budget.resoudre_exercice(utilisateur_id, budget.empreinte_analyse(analyse))
+        with budget.contexte(utilisateur_id=utilisateur_id, exercice_cle=exercice, cle_requete=empreinte):
+            brut, usage = resolution._appeler_anthropic(modele=modele, message=message)
         correction = verifier_correction(resolution.normaliser_correction(brut))
         _marquer_questions_manquantes(correction, analyse)
         _appliquer_concordances(correction, analyse)

@@ -15,6 +15,7 @@ from .correction_views import CorrectionExerciceView
 from .professeur_views import (ExplicationView, IndiceView, ReponseView, SeanceDetailView, SeancesView,
                                SolutionView, SuivanteView)
 from .exercice_views import DepotExerciceView
+from traitement_ia.views import RepriseView, TacheDetailView, TacheListeView
 
 app_name = "eleve"
 
@@ -35,6 +36,10 @@ urlpatterns = [
     path("professeur/seances/<str:id>/explication/", ExplicationView.as_view(), name="professeur-explication"),
     path("professeur/seances/<str:id>/solution/", SolutionView.as_view(), name="professeur-solution"),
     path("professeur/seances/<str:id>/suivante/", SuivanteView.as_view(), name="professeur-suivante"),
+    # Suivi d'une tâche IA longue (voir traitement_ia) : état, puis résultat.
+    path("reprise/", RepriseView.as_view(), name="reprise"),
+    path("taches/", TacheListeView.as_view(), name="tache-liste"),
+    path("taches/<uuid:id>/", TacheDetailView.as_view(), name="tache-detail"),
     path("glossaire/", TermeGlossaireEleveListeView.as_view(), name="glossaire-liste"),
     path("glossaire/<slug:slug>/", TermeGlossaireEleveDetailView.as_view(), name="glossaire-detail"),
     # Défini dans comptes/ (porte sur le modèle User), exposé ici pour

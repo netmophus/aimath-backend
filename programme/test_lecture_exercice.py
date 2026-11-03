@@ -408,6 +408,11 @@ class ConstructionDeLaRequeteTests(TestCase):
 
     def setUp(self):
         cache.clear()
+        # Le garde-fou budgétaire est actif même ici (identité + tarif du modèle fictif) : aucun appel sans contexte.
+        from budget_ia import service as budget
+        from budget_ia.tests.outils import TARIFS_TEST, creer_eleve
+        self.enterContext(override_settings(IA_TARIFS_USD=TARIFS_TEST))
+        self.enterContext(budget.contexte(utilisateur_id=creer_eleve().id, exercice_cle="ex-test"))
 
     def faux_sdk(self, entree_outil=None, stop_reason="tool_use"):
         reponse = SimpleNamespace(

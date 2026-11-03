@@ -19,6 +19,8 @@ doit appartenir à la classe de l'élève (request.user) ; un id hors classe, ou
 inexistant, donne le même 404 — jamais de 403 qui confirmerait son existence.
 """
 
+import hashlib
+
 from django.conf import settings
 from django.http import Http404
 from rest_framework import status
@@ -30,7 +32,11 @@ from comptes.permissions import IsEleveActif
 
 from .eleve_views import _programmes_de_la_classe
 from .exercice_serializers import DepotExerciceSerializer, matiere_resolvable
-from .ia.exceptions import IAConfigurationInvalide, IAErreur, IAQuotaDepasse, IATimeout
+from budget_ia.http import reponse_refus
+from traitement_ia.mixin import VueAsynchrone
+from traitement_ia.service import DemandeTache
+
+from .ia.exceptions import IAConfigurationInvalide, IAErreur, IAQuotaDepasse, IATimeout, RefusBudget
 from .lecture_exercice import (
     ContexteProgramme,
     LectureDejaEnCours,
@@ -45,11 +51,40 @@ from .professeur.seance import professeur_actif
 from .programme_serializers import construire_libelle
 
 
-class DepotExerciceView(APIView):
+class DepotExerciceView(VueAsynchrone, APIView):
     permission_classes = [IsEleveActif]
     parser_classes = [MultiPartParser, FormParser]
 
-    def post(self, request):
+    def preparer(self, request):
+        """Validation rapide (mêmes règles que `executer`). Seule une LECTURE par l'IA est mise en file : une simple
+        validation sans analyse reste synchrone et instantanée."""
+        valeur = request.data.get("programme")
+        programme = self._programme_accessible(request, valeur)
+        if programme is None and self._id_programme(valeur) is not None:
+            raise Http404
+        serializer = DepotExerciceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        donnees = serializer.validated_data
+        if programme is None:
+            raise Http404
+        if not matiere_resolvable(programme.matiere.nom):
+            return None  # `executer` renverra le 400 habituel
+        if not (donnees["analyser"] and lecture_activee()):
+            return None
+        fichiers, empreintes = [], hashlib.sha256()
+        for fichier, infos in zip(donnees.get("fichiers") or [], donnees["fichiers_valides"]):
+            fichier.seek(0)
+            octets = fichier.read()
+            fichier.seek(0)
+            fichiers.append(("fichiers", infos["nom"], infos["type"], octets))
+            empreintes.update(hashlib.sha256(octets).digest())
+        empreintes.update(f"{donnees['enonce']}|{donnees['correction']}|{donnees['mode']}".encode())
+        return DemandeTache(
+            type_tache="lecture", cle_requete=f"{programme.id}:{empreintes.hexdigest()[:40]}", fichiers=fichiers,
+            donnees={k: request.data.get(k) for k in ("programme", "mode", "enonce", "correction", "analyser") if request.data.get(k) is not None},
+        )
+
+    def executer(self, request):
         serializer = DepotExerciceSerializer(data=request.data)
 
         # 1) Accès au programme d'abord, avant toute lecture de fichier : un id
@@ -81,6 +116,8 @@ class DepotExerciceView(APIView):
                 resultat = self._lire(request, programme, donnees)
             except LectureDejaEnCours as exc:
                 return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+            except RefusBudget as exc:
+                return reponse_refus(exc)
             except (LectureRefusee, LectureTropLongue) as exc:
                 return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             except IAConfigurationInvalide:

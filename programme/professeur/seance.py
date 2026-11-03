@@ -35,6 +35,8 @@ import time
 from django.conf import settings
 from django.core.cache import cache
 
+from budget_ia import service as budget
+
 from ..ia.exceptions import IAErreur, IAReponseVide
 from ..lecture_exercice import ContexteProgramme, normaliser_analyse
 from ..correction.service import verifier_admissibilite
@@ -86,7 +88,7 @@ class Desactive(ProfesseurErreur):
 
 
 def professeur_actif() -> bool:
-    if not settings.IA_PROF_ACTIVE:
+    if not settings.IA_INTERRUPTEUR_GLOBAL or not settings.IA_PROF_ACTIVE:
         return False
     if settings.IA_PROF_DEV_SEULEMENT and not settings.DEBUG:
         return False
@@ -104,6 +106,8 @@ def _cle(id_seance: str) -> str:
 def _sauver(etat: dict) -> None:
     etat["expire_a"] = int(time.time()) + int(settings.IA_PROF_SEANCE_SECONDES)
     cache.set(_cle(etat["id"]), etat, timeout=int(settings.IA_PROF_SEANCE_SECONDES))
+    # Pointeur « séance courante de cet élève pour ce programme » (glissant comme la séance) : sert à la reprise après actualisation.
+    cache.set(f"prof:derniere:{etat['user_id']}:{etat['programme_id']}", etat["id"], timeout=int(settings.IA_PROF_SEANCE_SECONDES))
 
 
 def charger(id_seance: str, utilisateur_id: int) -> dict:
@@ -112,6 +116,18 @@ def charger(id_seance: str, utilisateur_id: int) -> dict:
     if etat is None or etat["user_id"] != utilisateur_id:
         raise SeanceIntrouvable("Cette séance n'existe plus ou a expiré. Recommence depuis ton exercice.")
     return copy.deepcopy(etat)
+
+
+def courante_de(utilisateur_id: int, programme_id: int) -> dict | None:
+    """Séance NON terminée de cet élève pour ce programme (état interne), ou None. Jamais celle d'un autre élève."""
+    identifiant = cache.get(f"prof:derniere:{utilisateur_id}:{programme_id}")
+    if not identifiant:
+        return None
+    try:
+        etat = charger(identifiant, utilisateur_id)
+    except SeanceIntrouvable:
+        return None
+    return None if etat["termine"] else etat
 
 
 # --------------------------------------------------------------------------
@@ -279,6 +295,8 @@ def demarrer(*, utilisateur_id: int, programme_id: int, contexte: ContexteProgra
         raise SeanceOccupee("Ta séance est déjà en cours de préparation. Patiente quelques secondes, sans renvoyer.")
     try:
         _quota_creation(utilisateur_id)
+        # Budget : la séance appartient à l'exercice dont l'analyse provient (lecture), même après renouvellement.
+        exercice_cle = budget.resoudre_exercice(utilisateur_id, budget.empreinte_analyse(analyse))
         cle_plan = f"prof:plan:{empreinte}"
         en_cache = cache.get(cle_plan)
         jetons = {"tokens_entree": 0, "tokens_sortie": 0}
@@ -286,7 +304,8 @@ def demarrer(*, utilisateur_id: int, programme_id: int, contexte: ContexteProgra
         if en_cache is not None:
             questions = copy.deepcopy(en_cache)
         else:
-            brut, usage = plan_module.generer_plan_brut(analyse, f"{contexte.matiere}, {contexte.classe}")
+            with budget.contexte(utilisateur_id=utilisateur_id, exercice_cle=exercice_cle, cle_requete=empreinte):
+                brut, usage = plan_module.generer_plan_brut(analyse, f"{contexte.matiere}, {contexte.classe}")
             appels = 1
             jetons = {"tokens_entree": usage.get("tokens_entree") or 0, "tokens_sortie": usage.get("tokens_sortie") or 0}
             questions, resume = plan_module.preparer_plan(brut)
@@ -303,7 +322,7 @@ def demarrer(*, utilisateur_id: int, programme_id: int, contexte: ContexteProgra
             "messages": [], "termine": False, "etape_terminee": False,
             "etudes": _etudes_du_plan(questions),
             "simulations": visualisation.preparer(analyse, contexte.matiere, questions),  # SECRET de séance, comme le plan
-            "nb_appels_ia": appels, "nb_actions": 0, "jetons": jetons, "reprise": False,
+            "exercice_cle": exercice_cle, "nb_appels_ia": appels, "nb_actions": 0, "jetons": jetons, "reprise": False,
         }
         _ajouter(etat, "prof", "Bonjour ! Je vais t'accompagner pas à pas. Je ne te donnerai pas les réponses : "
                              "tu cherches, tu te trompes si besoin, et on comprend ensemble. Allons-y !", "intro")
@@ -380,7 +399,10 @@ def _appeler_tour(etat: dict, **kwargs) -> tuple[dict | None, dict]:
         contexte=etat["contexte"], etape=etape, question=etat["plan"][etat["q"]], etat_etape=suivi,
         messages=etat["messages"], **kwargs,
     )
-    brut, usage = tour.appeler_tour(message)
+    # Budget : chaque interaction compte pour l'exercice de la séance (clé conservée à travers les renouvellements).
+    with budget.contexte(utilisateur_id=etat["user_id"], exercice_cle=etat.get("exercice_cle") or f"seance:{etat['id']}",
+                         cle_requete=f"{etat['id']}:{etat['version']}"):
+        brut, usage = tour.appeler_tour(message)
     etat["nb_appels_ia"] += 1
     etat["jetons"]["tokens_entree"] += usage.get("tokens_entree") or 0
     etat["jetons"]["tokens_sortie"] += usage.get("tokens_sortie") or 0

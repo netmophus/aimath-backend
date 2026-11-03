@@ -26,7 +26,13 @@ from comptes.permissions import IsEleveActif
 
 from .correction.service import CorrectionRefusee
 from .eleve_views import _programmes_de_la_classe
-from .ia.exceptions import IAConfigurationInvalide, IAErreur, IAQuotaDepasse, IATimeout
+import hashlib
+
+from budget_ia.http import reponse_refus
+from traitement_ia.mixin import VueAsynchrone
+from traitement_ia.service import DemandeTache
+
+from .ia.exceptions import IAConfigurationInvalide, IAErreur, IAQuotaDepasse, IATimeout, RefusBudget
 from .lecture_exercice import ContexteProgramme, LectureTropLongue
 from .professeur import seance
 from .professeur.reponses import LONGUEUR_MAX_REPONSE
@@ -65,6 +71,8 @@ def _erreur(message: str, code: int, motif: str = "erreur", **extra) -> Response
 
 
 def _erreur_ia(exc: Exception) -> Response:
+    if isinstance(exc, RefusBudget):
+        return reponse_refus(exc)
     if isinstance(exc, (CorrectionRefusee, LectureTropLongue)):
         return _erreur(str(exc), status.HTTP_400_BAD_REQUEST, "refuse")
     if isinstance(exc, IAConfigurationInvalide):
@@ -107,8 +115,35 @@ class _BaseView(APIView):
             return _erreur_ia(exc)
 
 
-class SeancesView(_BaseView):
-    def post(self, request):
+def _cle(*morceaux) -> str:
+    return hashlib.sha256("|".join(str(m) for m in morceaux).encode()).hexdigest()[:40]
+
+
+class SeancesView(VueAsynchrone, _BaseView):
+    def preparer(self, request):
+        """Validation rapide puis mise en file : le plan de séance (appel IA) peut durer plus de 30 s."""
+        from budget_ia.service import empreinte_analyse
+
+        try:
+            identifiant = int(request.data.get("programme"))
+        except (TypeError, ValueError):
+            identifiant = None
+        programme = self._programme(request, identifiant) if identifiant is not None else None
+        if identifiant is not None and programme is None:
+            raise Http404
+        if (refus := self._garde()) is not None:
+            return refus
+        serializer = DemarrerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if programme is None:
+            raise Http404
+        analyse = serializer.validated_data["analyse"]
+        return DemandeTache(
+            type_tache="seance_demarrer", cle_requete=f"{programme.id}:{empreinte_analyse(analyse)[:40]}",
+            donnees={"programme": identifiant, "analyse": analyse},
+        )
+
+    def executer(self, request):
         try:
             identifiant = int(request.data.get("programme"))
         except (TypeError, ValueError):
@@ -181,10 +216,18 @@ class SeanceDetailView(_SeanceView):
         return self._executer(lambda: _reponse_etat(self._charger(request, id)))
 
 
-class ReponseView(_SeanceView):
+class ReponseView(VueAsynchrone, _SeanceView):
     serializer_class = ReponseSerializer
 
-    def post(self, request, id):
+    def preparer(self, request, id):
+        if (refus := self._garde()) is not None:
+            return refus
+        donnees = self.serializer_class(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        v = donnees.validated_data
+        return DemandeTache(type_tache="seance_reponse", cle_requete=_cle(id, v["version"], v["texte"]), donnees=dict(request.data))
+
+    def executer(self, request, id):
         return self._traiter(request, id, lambda d: seance.repondre(id, request.user.id, d["version"], d["texte"]))
 
 
@@ -193,10 +236,20 @@ class IndiceView(_SeanceView):
         return self._traiter(request, id, lambda d: seance.indice(id, request.user.id, d["version"]))
 
 
-class ExplicationView(_SeanceView):
+class ExplicationView(VueAsynchrone, _SeanceView):
     serializer_class = ExplicationSerializer
 
-    def post(self, request, id):
+    def preparer(self, request, id):
+        if (refus := self._garde()) is not None:
+            return refus
+        donnees = self.serializer_class(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        v = donnees.validated_data
+        return DemandeTache(
+            type_tache="seance_explication", cle_requete=_cle(id, v["version"], v["type"], v["texte"]), donnees=dict(request.data),
+        )
+
+    def executer(self, request, id):
         return self._traiter(request, id, lambda d: seance.explication(id, request.user.id, d["version"], d["type"], d["texte"]))
 
 

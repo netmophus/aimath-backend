@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 
 from comptes.permissions import IsAdminRole
 
-from .ia.exceptions import IAConfigurationInvalide, IAErreur, SectionInconnue
+from .ia.exceptions import IAConfigurationInvalide, IAErreur, RefusBudget, SectionInconnue
 from .ia.service import generer_section, verifier_contenu
 from .ia_serializers import GenererSectionSerializer, VerifierContenuSerializer
 from .models import Notion, PromptSectionNotion
@@ -37,6 +37,8 @@ def _statut_pour_erreur(exc: IAErreur) -> int:
     modèle manquante) -> 500 : le client n'y peut rien. Toute autre erreur IA
     (quota, timeout, réponse vide ou mal formée) -> 502 : c'est le
     fournisseur en amont qui a fait défaut, pas notre API."""
+    if isinstance(exc, RefusBudget):  # budget épuisé / interrupteur : code propre (503), pas une panne fournisseur
+        return exc.statut_http
     if isinstance(exc, IAConfigurationInvalide):
         return status.HTTP_500_INTERNAL_SERVER_ERROR
     return status.HTTP_502_BAD_GATEWAY

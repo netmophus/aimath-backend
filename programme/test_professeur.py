@@ -1041,7 +1041,13 @@ class FuiteTests(SimpleTestCase):
         self.assertEqual(tour.filtrer_fuite("Tu as correctement dérivé $x^3$.", None, incorrect)[0], "Tu as correctement dérivé $x^3$.")
 
 
-class AppelAnthropicTests(SimpleTestCase):
+class AppelAnthropicTests(TestCase):
+    def setUp(self):
+        from budget_ia import service as budget
+        from budget_ia.tests.outils import TARIFS_TEST, creer_eleve
+        self.enterContext(override_settings(IA_TARIFS_USD=TARIFS_TEST))
+        self.enterContext(budget.contexte(utilisateur_id=creer_eleve().id, exercice_cle="ex-test"))
+
     @override_settings(ANTHROPIC_API_KEY="cle-factice", IA_PROF_TIMEOUT_SECONDES=33)
     def test_requete(self):
         reponse = SimpleNamespace(content=[SimpleNamespace(type="tool_use", name=tour.NOM_OUTIL, input={"message": "ok"})],

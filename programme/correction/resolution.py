@@ -17,6 +17,8 @@ import logging
 
 from django.conf import settings
 
+from budget_ia import service as budget
+
 from ..ia.exceptions import (
     IAConfigurationInvalide, IAErreurFournisseur, IAQuotaDepasse, IAReponseVide, IATimeout,
 )
@@ -161,15 +163,20 @@ def _appeler_anthropic(*, modele: str, message: str) -> tuple[dict, dict]:
 
     delai = float(settings.IA_CORRECTION_TIMEOUT_SECONDES)
     client = anthropic.Anthropic(api_key=cle, timeout=delai, max_retries=0)
+    # Budget : contrôles + réservation AVANT l'appel (lève sans jamais joindre le fournisseur).
+    op = budget.ouvrir(
+        fonctionnalite="correction", modele=modele, tokens_sortie_max=settings.IA_CORRECTION_MAX_TOKENS,
+        tokens_entree=budget.estimer_entree(message=message, systeme=SYSTEME, outil=OUTIL),
+    )
     try:
-        reponse = client.messages.create(
+        reponse = budget.appeler_sdk(op, lambda: client.messages.create(
             model=modele,
             max_tokens=settings.IA_CORRECTION_MAX_TOKENS,
             system=SYSTEME,
             tools=[OUTIL],
             tool_choice={"type": "tool", "name": NOM_OUTIL},
             messages=[{"role": "user", "content": message}],
-        )
+        ))
     except anthropic.AuthenticationError as exc:
         raise IAConfigurationInvalide("Clé API Anthropic refusée par le fournisseur.") from exc
     except anthropic.RateLimitError as exc:

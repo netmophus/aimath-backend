@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/admin/', include('programme.programme_urls')),
     path('api/admin/ia/prompts/', include('programme.prompt_ia_urls')),
     path('api/admin/ia/', include('programme.ia_urls')),
+    path('api/admin/budget-ia/', include('budget_ia.urls')),
     path('api/eleve/', include('programme.eleve_urls')),
     path('api/vendeur/', include('comptes.vendeur_urls')),
     # PUBLIC (webhook NITA, voir comptes.nita_views.NitaCallbackView) —

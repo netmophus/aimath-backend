@@ -675,7 +675,8 @@ class CorrectionExerciceTests(TestCase):
 
     # --- Requête Anthropic -----------------------------------------------------
 
-    @override_settings(IA_CORRECTION_MODELE="modele-de-correction", IA_CORRECTION_MAX_TOKENS=9999, IA_CORRECTION_TIMEOUT_SECONDES=77)
+    @override_settings(IA_CORRECTION_MODELE="modele-de-correction", IA_CORRECTION_MAX_TOKENS=9999, IA_CORRECTION_TIMEOUT_SECONDES=77,
+                       IA_TARIFS_USD={"modele-de-correction": {"entree": "2", "sortie": "10", "cache_ecriture_5m": "2.5", "cache_ecriture_1h": "4", "cache_lecture": "0.2"}})
     def test_requete_envoyee_a_anthropic(self):
         reponse = SimpleNamespace(
             content=[SimpleNamespace(type="tool_use", name=resolution.NOM_OUTIL, input=copy.deepcopy(CORRECTION_EX1))],

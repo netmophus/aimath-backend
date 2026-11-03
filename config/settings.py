@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     # Apps métier
     'programme',
     'comptes',
+    'budget_ia',
+    'traitement_ia',
 ]
 
 AUTH_USER_MODEL = 'comptes.User'
@@ -213,7 +215,7 @@ SIMPLE_JWT = {
 IA_FOURNISSEUR = config('IA_FOURNISSEUR', default='anthropic')
 # claude-sonnet-5 : bon compromis qualité de rédaction / coût pour un usage
 # répété (un appel = une section de leçon). À ajuster ici si besoin.
-IA_MODELE = config('IA_MODELE', default='claude-sonnet-5')
+IA_MODELE = config('IA_MODELE', default='claude-sonnet-5-5')
 IA_TIMEOUT_SECONDES = config('IA_TIMEOUT_SECONDES', default=180, cast=int)
 # 16000 : claude-sonnet-5 consomme une partie du budget de sortie en tokens
 # de "réflexion" interne avant de produire le texte final — 4096 puis 8192
@@ -325,4 +327,73 @@ LOGGING = {
             'propagate': False,
         },
     },
-}
+}
+
+# ---------------------------------------------------------------------------
+#  Budget IA (app budget_ia) : plafond GLOBAL mensuel, quotas par élève, interrupteur.
+#  Montants = ESTIMATIONS internes en FCFA (jamais la facture Anthropic). Tout est réglable par variable d'environnement.
+# ---------------------------------------------------------------------------
+# Interrupteur global : False coupe TOUS les appels Anthropic (lecture, correction, fahimta ai, contenu admin)
+# sans toucher aux autres fonctionnalités. Les trois IA_*_ACTIVE restent nécessaires en plus.
+IA_INTERRUPTEUR_GLOBAL = config('IA_INTERRUPTEUR_GLOBAL', default=True, cast=bool)
+BUDGET_IA_MENSUEL_FCFA = config('BUDGET_IA_MENSUEL_FCFA', default=100000, cast=int)       # plafond de référence
+BUDGET_IA_SEUIL_OPERATIONNEL_FCFA = config('BUDGET_IA_SEUIL_OPERATIONNEL_FCFA', default=90000, cast=int)  # blocage réel
+# Taux USD/FCFA : valeur PRUDENTE (au-dessus de la fourchette observée 574 à 597 en juillet 2026, sources non officielles).
+# À réviser régulièrement : c'est un réglage, pas une constante.
+IA_TAUX_USD_FCFA = config('IA_TAUX_USD_FCFA', default='600')
+IA_TAUX_USD_FCFA_DATE = config('IA_TAUX_USD_FCFA_DATE', default='2026-11-03')
+IA_MARGE_SECURITE = config('IA_MARGE_SECURITE', default='0.10')   # +10 % sur tous les coûts estimés
+# Référence BCEAO du 2026-11-03 : cours vendeur USD 589,25 FCFA (transferts). Information : le taux retenu ci-dessus (600) reste plus prudent.
+IA_TAUX_BCEAO_REFERENCE = config('IA_TAUX_BCEAO_REFERENCE', default='589.25')
+IA_TAUX_BCEAO_DATE = config('IA_TAUX_BCEAO_DATE', default='2026-11-03')
+IA_TARIFS_USD = config('IA_TARIFS_USD', default='', cast=lambda v: __import__('json').loads(v) if v else None)
+# Quotas par élève (fuseau Africa/Niamey pour le jour).
+IA_EXERCICES_PAR_JOUR = config('IA_EXERCICES_PAR_JOUR', default=3, cast=int)
+IA_INTERACTIONS_PROF_PAR_EXERCICE = config('IA_INTERACTIONS_PROF_PAR_EXERCICE', default=10, cast=int)
+IA_LECTURES_MAX_PAR_EXERCICE = config('IA_LECTURES_MAX_PAR_EXERCICE', default=3, cast=int)       # 1 lecture + 2 relectures
+IA_CORRECTIONS_MAX_PAR_EXERCICE = config('IA_CORRECTIONS_MAX_PAR_EXERCICE', default=2, cast=int)
+IA_PLANS_MAX_PAR_EXERCICE = config('IA_PLANS_MAX_PAR_EXERCICE', default=2, cast=int)
+# Plafond de tokens de sortie d'une réponse conversationnelle (fahimta ai). Les sorties structurées d'un seul coup
+# (lecture, correction, plan) gardent leurs plafonds propres : 4000 les tronquerait.
+IA_MAX_TOKENS_SORTIE_PAR_REPONSE = config('IA_MAX_TOKENS_SORTIE_PAR_REPONSE', default=4000, cast=int)
+# Estimation PRUDENTE des tokens d'entrée avant l'appel (réservation).
+IA_EST_CARACTERES_PAR_TOKEN = config('IA_EST_CARACTERES_PAR_TOKEN', default='2.5')
+IA_EST_TOKENS_PAR_IMAGE = config('IA_EST_TOKENS_PAR_IMAGE', default=5000, cast=int)   # doc vision : ceil(l/28) x ceil(h/28), plafond selon le modèle : réserve large
+IA_EST_TOKENS_PAR_PAGE_PDF = config('IA_EST_TOKENS_PAR_PAGE_PDF', default=3500, cast=int)
+IA_EST_TOKENS_FIXES = config('IA_EST_TOKENS_FIXES', default=1500, cast=int)   # consignes + schéma d'outil
+
+
+# ---------------------------------------------------------------------------
+#  Cache PARTAGÉ (PostgreSQL) : séances fahimta ai, verrous anti double envoi, résultats mis en cache.
+#  Le cache par défaut de Django (mémoire locale) est propre à CHAQUE processus : avec plusieurs workers gunicorn, un
+#  second dyno ou un redémarrage, les séances disparaissaient et les verrous ne protégeaient plus rien. La table
+#  `cache_fahimta` est créée par la migration traitement_ia.0002. MAX_ENTRIES très haut : jamais d'éviction anticipée.
+#  Redis n'est pas nécessaire à ce volume (quelques dizaines d'élèves) : une base de plus à payer pour rien.
+# ---------------------------------------------------------------------------
+if config('CACHE_BACKEND', default='db') == 'locmem':   # tests rapides / debug uniquement
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'cache_fahimta',
+            'OPTIONS': {'MAX_ENTRIES': 100000, 'CULL_FREQUENCY': 3},
+        }
+    }
+
+# ---------------------------------------------------------------------------
+#  Traitement asynchrone des appels IA longs (app traitement_ia, process type Heroku `worker`).
+#  False = ancien comportement synchrone (développement, tests). En production : True, et un dyno worker DOIT tourner.
+# ---------------------------------------------------------------------------
+IA_TRAITEMENT_ASYNCHRONE = config('IA_TRAITEMENT_ASYNCHRONE', default=False, cast=bool)
+IA_TACHES_ACTIVES_MAX_PAR_ELEVE = config('IA_TACHES_ACTIVES_MAX_PAR_ELEVE', default=3, cast=int)
+IA_TACHE_TENTATIVES_MAX = config('IA_TACHE_TENTATIVES_MAX', default=2, cast=int)
+# Une réservation budgétaire laissée ouverte (processus tué) est soldée après cette durée ; le bail d'une tâche est plus
+# long, pour qu'une reprise ne soit jamais refusée comme « double envoi » par sa propre réservation périmée.
+IA_RESERVATION_PEREMPTION_SECONDS = config('IA_RESERVATION_PEREMPTION_SECONDS', default=420, cast=int)
+IA_TACHE_BAIL_SECONDES = config('IA_TACHE_BAIL_SECONDES', default=480, cast=int)
+IA_TACHE_RESULTAT_SECONDES = config('IA_TACHE_RESULTAT_SECONDES', default=7200, cast=int)  # résultat conservé 2 h
+# Après expiration, seule une trace SANS contenu reste 24 h : l'élève lit « résultat expiré » au lieu d'un silence.
+IA_TACHE_TRACE_SECONDES = config('IA_TACHE_TRACE_SECONDES', default=86400, cast=int)
+IA_WORKER_THREADS = config('IA_WORKER_THREADS', default=4, cast=int)
+IA_WORKER_INTERVALLE_SECONDES = config('IA_WORKER_INTERVALLE_SECONDES', default='0.5')

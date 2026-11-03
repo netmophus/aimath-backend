@@ -26,7 +26,11 @@ from .correction.service import (
     CorrectionDejaEnCours, CorrectionRefusee, corriger_exercice, correction_activee,
 )
 from .eleve_views import _programmes_de_la_classe
-from .ia.exceptions import IAConfigurationInvalide, IAErreur, IAQuotaDepasse, IATimeout
+from budget_ia.http import reponse_refus
+from traitement_ia.mixin import VueAsynchrone
+from traitement_ia.service import DemandeTache
+
+from .ia.exceptions import IAConfigurationInvalide, IAErreur, IAQuotaDepasse, IATimeout, RefusBudget
 from .lecture_exercice import ContexteProgramme, LectureTropLongue, normaliser_analyse
 from .programme_serializers import construire_libelle
 from .simulations import avec_simulations
@@ -46,10 +50,37 @@ class CorrectionSerializer(serializers.Serializer):
         return valeur
 
 
-class CorrectionExerciceView(APIView):
+class CorrectionExerciceView(VueAsynchrone, APIView):
     permission_classes = [IsEleveActif]
 
-    def post(self, request):
+    def preparer(self, request):
+        """Validation rapide puis mise en file : la correction (appel IA + vérifications) peut durer plus de 30 s."""
+        from budget_ia.service import empreinte_analyse
+
+        try:
+            identifiant = int(request.data.get("programme"))
+        except (TypeError, ValueError):
+            identifiant = None
+        if identifiant is not None and not (
+            _programmes_de_la_classe(request.user).filter(pk=identifiant).exists()
+        ):
+            raise Http404
+        if not correction_activee():
+            return Response(
+                {"detail": "La correction complète n'est pas encore disponible.", "code": "correction_desactivee"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        serializer = CorrectionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if identifiant is None:
+            raise Http404
+        analyse = serializer.validated_data["analyse"]
+        return DemandeTache(
+            type_tache="correction", cle_requete=f"{identifiant}:{empreinte_analyse(analyse)[:40]}",
+            donnees={"programme": identifiant, "analyse": analyse},
+        )
+
+    def executer(self, request):
         try:
             identifiant = int(request.data.get("programme"))
         except (TypeError, ValueError):
@@ -88,6 +119,8 @@ class CorrectionExerciceView(APIView):
             )
         except CorrectionDejaEnCours as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+        except RefusBudget as exc:
+            return reponse_refus(exc)
         except (CorrectionRefusee, LectureTropLongue) as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except IAConfigurationInvalide:

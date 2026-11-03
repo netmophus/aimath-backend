@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from django.conf import settings
 from django.core.cache import cache
 
+from budget_ia import service as budget
+
 from .ia.exceptions import (
     IAConfigurationInvalide,
     IAErreur,
@@ -102,7 +104,7 @@ class ResultatLecture:
 def lecture_activee() -> bool:
     """Vrai seulement si l'analyse est explicitement activée ET, tant que
     IA_LECTURE_DEV_SEULEMENT est vrai (défaut), si DEBUG l'est aussi."""
-    if not settings.IA_LECTURE_ACTIVE:
+    if not settings.IA_INTERRUPTEUR_GLOBAL or not settings.IA_LECTURE_ACTIVE:
         return False
     if settings.IA_LECTURE_DEV_SEULEMENT and not settings.DEBUG:
         return False
@@ -352,15 +354,20 @@ def _envoyer_a_anthropic(*, modele: str, contenu: list[dict]) -> tuple[dict, dic
     delai = float(settings.IA_LECTURE_TIMEOUT_SECONDES)
     client = anthropic.Anthropic(api_key=cle, timeout=delai, max_retries=0)
 
+    # Budget : contrôles + réservation AVANT l'appel (lève sans jamais joindre le fournisseur).
+    op = budget.ouvrir(
+        fonctionnalite="lecture", modele=modele, tokens_sortie_max=settings.IA_LECTURE_MAX_TOKENS,
+        tokens_entree=budget.estimer_entree(blocs=contenu, systeme=SYSTEME, outil=OUTIL),
+    )
     try:
-        reponse = client.messages.create(
+        reponse = budget.appeler_sdk(op, lambda: client.messages.create(
             model=modele,
             max_tokens=settings.IA_LECTURE_MAX_TOKENS,
             system=SYSTEME,
             tools=[OUTIL],
             tool_choice={"type": "tool", "name": NOM_OUTIL},
             messages=[{"role": "user", "content": contenu}],
-        )
+        ))
     except anthropic.AuthenticationError as exc:
         raise IAConfigurationInvalide("Clé API Anthropic refusée par le fournisseur.") from exc
     except anthropic.RateLimitError as exc:
@@ -561,8 +568,12 @@ def lire_exercice(
     try:
         modele = settings.IA_LECTURE_MODELE or settings.IA_MODELE
         contenu = construire_contenu(pages, enonce, correction, contexte)
-        brut, usage = _envoyer_a_anthropic(modele=modele, contenu=contenu)
-        analyse = normaliser_analyse(brut, contexte)
+        # Identité de l'exercice (sans la remarque de relecture : une relecture reste le même exercice).
+        exercice = budget.empreinte_depot(utilisateur_id, programme_id, [p.octets for p in pages], enonce)
+        with budget.contexte(utilisateur_id=utilisateur_id, exercice_cle=exercice, cle_requete=empreinte) as ctx_budget:
+            brut, usage = _envoyer_a_anthropic(modele=modele, contenu=contenu)
+            analyse = normaliser_analyse(brut, contexte)
+            ctx_budget.associer_analyse(analyse)
         cache.set(cle_cache, analyse, timeout=int(settings.IA_LECTURE_CACHE_SECONDES))
         return ResultatLecture(
             analyse=analyse,

@@ -101,6 +101,7 @@ class LeconAdmin(admin.ModelAdmin):
         'objectifs_pedagogiques',
         'prerequis_texte', 'prerequis_lecons',
         'cours_redige', 'demonstrations', 'a_retenir', 'sujet_examen',
+        'simuler_pour_comprendre', 'pour_aller_plus_loin',
         'statut', 'est_gratuit',
     ]
     inlines = [ExerciceInline, VideoInline, RessourceInline]

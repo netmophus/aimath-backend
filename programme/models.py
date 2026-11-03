@@ -158,6 +158,18 @@ class Lecon(models.Model):
     # corrigés d'exercices (voir components/eleve/CarteCorrigeExamen.tsx).
     sujet_examen = models.TextField(blank=True, default="")  # Markdown + LaTeX
 
+    # Deux sections pédagogiques FACULTATIVES, vides par défaut, saisies à la
+    # main (aucune génération IA, aucun remplissage automatique). Affichées côté
+    # élève uniquement si non vides ; soumises au même verrou premium que le
+    # reste du contenu (voir LeconEleveSerializer.to_representation).
+    # `db_default` : le DEFAULT '' reste PERSISTANT en base (un simple `default`
+    # est retiré par Django après l'ADD COLUMN). Indispensable à la transition :
+    # pendant le déploiement, et après un éventuel rollback du code, l'ANCIEN
+    # backend (qui ignore ces colonnes) doit pouvoir encore créer des leçons
+    # sans violer le NOT NULL.
+    simuler_pour_comprendre = models.TextField(blank=True, default="", db_default="")  # Markdown + LaTeX + blocs de simulation
+    pour_aller_plus_loin = models.TextField(blank=True, default="", db_default="")  # Markdown + LaTeX
+
     # Verrouillage premium : False (par défaut) = leçon réservée aux élèves
     # abonnés (voir programme.acces.eleve_peut_acceder) ; True = accessible à
     # tout élève, abonné ou non. Indépendant de `statut` : une leçon peut être

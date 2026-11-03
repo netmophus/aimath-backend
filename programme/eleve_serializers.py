@@ -159,6 +159,7 @@ class LeconEleveSerializer(serializers.ModelSerializer):
             "objectifs_pedagogiques", "prerequis_texte",
             "cours_redige", "demonstrations", "a_retenir",
             "sujet_examen",
+            "simuler_pour_comprendre", "pour_aller_plus_loin",
             "exercices", "videos", "ressources",
             "verrouille",
         ]
@@ -192,6 +193,8 @@ class LeconEleveSerializer(serializers.ModelSerializer):
             data["demonstrations"] = ""
             data["a_retenir"] = ""
             data["sujet_examen"] = ""
+            data["simuler_pour_comprendre"] = ""
+            data["pour_aller_plus_loin"] = ""
             data["exercices"] = []
             data["videos"] = []
             data["ressources"] = []

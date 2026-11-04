@@ -14,12 +14,20 @@ from .serializers import (ApercuSerializer, DecisionParentaleSerializer, Paramet
 User = get_user_model()
 
 
+class AdminActif(IsAdminRole):
+    """Administrateur au statut actif : un administrateur suspendu ou en attente ne peut ni régler ni envoyer, même avec un jeton encore valide.
+    (IsAdminRole, partagé avec tout le reste de l'application, n'est pas modifié.)"""
+
+    def has_permission(self, request, view) -> bool:
+        return super().has_permission(request, view) and request.user.statut == User.Statut.ACTIF
+
+
 def _erreur(e: services.ErreurMetier):
     return Response({"detail": e.message, "code": e.code}, status=e.statut_http)
 
 
 class ParametresView(APIView):
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def get(self, request):
         return Response(parametres_dict())
@@ -44,7 +52,7 @@ class ParametresView(APIView):
 
 
 class ModelesView(APIView):
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def get(self, request):
         return Response(services.MODELES)
@@ -52,7 +60,7 @@ class ModelesView(APIView):
 
 class ApercuView(APIView):
     """Prépare une campagne et renvoie l'aperçu. N'ENVOIE RIEN."""
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def post(self, request):
         ser = ApercuSerializer(data=request.data)
@@ -68,7 +76,7 @@ class ApercuView(APIView):
 
 
 class ConfirmerView(APIView):
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def post(self, request, id):
         try:
@@ -81,7 +89,7 @@ class ConfirmerView(APIView):
 
 
 class ArreterView(APIView):
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def post(self, request, id):
         try:
@@ -91,7 +99,7 @@ class ArreterView(APIView):
 
 
 class RelancerView(APIView):
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def post(self, request, id):
         try:
@@ -102,7 +110,7 @@ class RelancerView(APIView):
 
 class CampagnesView(ListAPIView):
     """Historique. Les aperçus jamais confirmés n'en font pas partie : rien n'a été envoyé."""
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def get_queryset(self):
         return Campagne.objects.exclude(statut=Campagne.Statut.APERCU).select_related("auteur")
@@ -113,7 +121,7 @@ class CampagnesView(ListAPIView):
 
 
 class CampagneDetailView(APIView):
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def get(self, request, id):
         c = Campagne.objects.select_related("auteur").filter(id=id).first()
@@ -124,7 +132,7 @@ class CampagneDetailView(APIView):
 
 class MessagesView(ListAPIView):
     """?campagne=<id> et/ou ?utilisateur=<id> ; ?statut=. Téléphones toujours masqués."""
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def get_queryset(self):
         qs = (MessageSms.objects.exclude(campagne__statut=Campagne.Statut.APERCU)
@@ -144,7 +152,7 @@ class MessagesView(ListAPIView):
 
 
 class StatutActivationView(APIView):
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def get(self, request):
         ids = [int(x) for x in request.query_params.get("ids", "").split(",") if x.strip().isdigit()][:200]
@@ -153,7 +161,7 @@ class StatutActivationView(APIView):
 
 class PreferenceView(APIView):
     """Administrateur : consulte les préférences d'un compte et son éventuelle opposition."""
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def get(self, request, id):
         u = User.objects.filter(id=id).first()
@@ -176,7 +184,7 @@ class PreferenceView(APIView):
 
 class ConsentementParentalView(APIView):
     """Administrateur : valide, refuse ou révoque l'accord parental après vérification (consigné)."""
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def post(self, request, id):
         u = User.objects.filter(id=id).first()
@@ -193,7 +201,7 @@ class ConsentementParentalView(APIView):
 
 class ConsentementsParentauxView(APIView):
     """Administrateur : file des demandes d'accord parental à vérifier."""
-    permission_classes = [IsAdminRole]
+    permission_classes = [AdminActif]
 
     def get(self, request):
         qs = (PreferenceCommunication.objects.filter(parental_statut=PreferenceCommunication.Parental.DEMANDE)

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db.models import Count
 from rest_framework import serializers
@@ -33,8 +35,9 @@ class ApercuSerializer(serializers.Serializer):
 class ParametresSerializer(serializers.Serializer):
     lien_whatsapp = serializers.CharField(required=False, allow_blank=True, max_length=200)
     plafond_mensuel_fcfa = serializers.IntegerField(required=False, min_value=0, max_value=100_000_000)
+    # Strictement positif (0 rendrait tout budget inoperant). null = tarif inconnu : aucun envoi possible.
     cout_segment_fcfa = serializers.DecimalField(required=False, allow_null=True, max_digits=8, decimal_places=2,
-                                                 min_value=0)
+                                                 min_value=Decimal("0.01"))
 
 
 class PreferenceSerializer(serializers.Serializer):

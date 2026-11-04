@@ -28,6 +28,8 @@ urlpatterns = [
     path('api/admin/budget-ia/', include('budget_ia.urls')),
     path('api/eleve/aide/', include('aide.eleve_urls')),
     path('api/admin/aide/', include('aide.admin_urls')),
+    path('api/admin/communications/', include('communications.urls')),
+    path('api/eleve/communication/', include('communications.eleve_urls')),
     path('api/eleve/', include('programme.eleve_urls')),
     path('api/vendeur/', include('comptes.vendeur_urls')),
     # PUBLIC (webhook NITA, voir comptes.nita_views.NitaCallbackView) —

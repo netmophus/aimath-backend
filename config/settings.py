@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'budget_ia',
     'traitement_ia',
     'aide',
+    'communications',
 ]
 
 AUTH_USER_MODEL = 'comptes.User'
@@ -401,3 +402,14 @@ IA_TACHE_RESULTAT_SECONDES = config('IA_TACHE_RESULTAT_SECONDES', default=7200, 
 IA_TACHE_TRACE_SECONDES = config('IA_TACHE_TRACE_SECONDES', default=86400, cast=int)
 IA_WORKER_THREADS = config('IA_WORKER_THREADS', default=4, cast=int)
 IA_WORKER_INTERVALLE_SECONDES = config('IA_WORKER_INTERVALLE_SECONDES', default='0.5')
+
+# ---------------------------------------------------------------------------
+#  Communications SMS administrateur (app communications). Envois reels DESACTIVES par defaut.
+#  COMMUNICATIONS_FOURNISSEUR : 'simule' (aucun appel reseau) ou 'lam' (comptes/sms.py, variables LAM_*).
+# ---------------------------------------------------------------------------
+COMMUNICATIONS_SMS_ACTIVES = config('COMMUNICATIONS_SMS_ACTIVES', default=False, cast=bool)
+COMMUNICATIONS_FOURNISSEUR = config('COMMUNICATIONS_FOURNISSEUR', default='simule')
+COMMUNICATIONS_DEBIT_PAR_MINUTE = config('COMMUNICATIONS_DEBIT_PAR_MINUTE', default=60, cast=int)
+COMMUNICATIONS_LOT = config('COMMUNICATIONS_LOT', default=20, cast=int)
+COMMUNICATIONS_TIMEOUT_REPRISE_MIN = config('COMMUNICATIONS_TIMEOUT_REPRISE_MIN', default=10, cast=int)
+COMMUNICATIONS_APERCU_VALIDITE_MIN = config('COMMUNICATIONS_APERCU_VALIDITE_MIN', default=60, cast=int)

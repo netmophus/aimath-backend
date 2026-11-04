@@ -138,3 +138,52 @@ def envoyer_sms(telephone: str, texte: str) -> bool:
 
     logger.info("SMS envoyé à %s.", to)
     return True
+
+
+def envoyer_sms_detail(telephone: str, texte: str) -> tuple[str, str]:
+    """Variante de envoyer_sms() qui distingue les issues, pour le module `communications`.
+
+    Retourne (resultat, code) avec resultat parmi :
+    - "accepte"    : LAM a accepté le message (ou mode simulé). Ce n'est PAS une confirmation de livraison.
+    - "refuse"     : LAM a répondu une erreur HTTP : le message n'est pas parti, définitif.
+    - "non_envoye" : rien n'a pu partir (configuration incomplète, LAM injoignable) : rejouable sans risque.
+    - "incertain"  : la requête a pu atteindre LAM sans réponse exploitable (délai de lecture dépassé…).
+      Ne JAMAIS renvoyer automatiquement : le SMS est peut-être parti.
+    `code` est un court identifiant technique, sans numéro, texte ni secret. Ne lève jamais.
+    envoyer_sms() est volontairement laissée inchangée (utilisée par NITA et les abonnements).
+    """
+    to = normaliser_telephone_sms(telephone)
+
+    if settings.SMS_MOCK:
+        logger.info("[SMS_MOCK] envoi simulé (communications)")
+        return "accepte", "mock"
+
+    if not all([settings.LAM_SMS_URL, settings.LAM_ACCOUNTID, settings.LAM_PASSWORD, settings.LAM_DEFAULT_SENDER]):
+        return "non_envoye", "config_incomplete"
+
+    payload = {
+        "accountid": settings.LAM_ACCOUNTID,
+        "password": settings.LAM_PASSWORD,
+        "sender": settings.LAM_DEFAULT_SENDER,
+        "text": texte,
+        "from": settings.LAM_DEFAULT_SENDER,
+        "content": texte,
+        "to": to,
+        "dlr": "yes",
+        "dlr-level": 3,
+        "dlr-method": "GET",
+        "dlr-url": _DLR_URL,
+    }
+    try:
+        reponse = requests.post(
+            settings.LAM_SMS_URL, json=payload, auth=(settings.LAM_ACCOUNTID, settings.LAM_PASSWORD),
+            headers={"Content-Type": "application/json"}, timeout=TIMEOUT_SECONDES,
+        )
+    except (requests.ConnectTimeout, requests.ConnectionError):
+        return "non_envoye", "injoignable"
+    except requests.RequestException:
+        return "incertain", "reponse_inconnue"
+
+    if not reponse.ok:
+        return "refuse", f"http_{reponse.status_code}"
+    return "accepte", "http_ok"

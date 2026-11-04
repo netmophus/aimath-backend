@@ -77,6 +77,11 @@ class AdminCompteViewSet(
         if role:
             queryset = queryset.filter(role=role)
 
+        for param, champ in (("niveau", "niveau_id"), ("serie", "serie_id")):
+            valeur = params.get(param)
+            if valeur and valeur.isdigit():
+                queryset = queryset.filter(**{champ: int(valeur)})
+
         search = params.get("search")
         if search:
             queryset = queryset.filter(

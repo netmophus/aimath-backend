@@ -87,12 +87,11 @@ class Desactive(ProfesseurErreur):
     code, statut_http = "professeur_desactive", 503
 
 
-def professeur_actif() -> bool:
-    if not settings.IA_INTERRUPTEUR_GLOBAL or not settings.IA_PROF_ACTIVE:
-        return False
-    if settings.IA_PROF_DEV_SEULEMENT and not settings.DEBUG:
-        return False
-    return True
+def professeur_actif(utilisateur_id: int | None = None) -> bool:
+    """Voir budget_ia.acces : mode pilote (liste blanche) ou, à défaut, IA_PROF_DEV_SEULEMENT."""
+    from budget_ia.acces import fonction_ouverte
+
+    return fonction_ouverte(settings.IA_PROF_ACTIVE, settings.IA_PROF_DEV_SEULEMENT, utilisateur_id)
 
 
 # --------------------------------------------------------------------------

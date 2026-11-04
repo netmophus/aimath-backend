@@ -101,14 +101,12 @@ class ResultatLecture:
 #  Activation
 # --------------------------------------------------------------------------
 
-def lecture_activee() -> bool:
-    """Vrai seulement si l'analyse est explicitement activée ET, tant que
-    IA_LECTURE_DEV_SEULEMENT est vrai (défaut), si DEBUG l'est aussi."""
-    if not settings.IA_INTERRUPTEUR_GLOBAL or not settings.IA_LECTURE_ACTIVE:
-        return False
-    if settings.IA_LECTURE_DEV_SEULEMENT and not settings.DEBUG:
-        return False
-    return True
+def lecture_activee(utilisateur_id: int | None = None) -> bool:
+    """Vrai seulement si l'analyse est explicitement activée ET, tant que IA_LECTURE_DEV_SEULEMENT est vrai (défaut), si
+    DEBUG l'est aussi. En mode pilote (IA_COMPTES_AUTORISES), seuls les comptes de la liste blanche : voir budget_ia.acces."""
+    from budget_ia.acces import fonction_ouverte
+
+    return fonction_ouverte(settings.IA_LECTURE_ACTIVE, settings.IA_LECTURE_DEV_SEULEMENT, utilisateur_id)
 
 
 def cle_matiere(nom: str) -> str | None:

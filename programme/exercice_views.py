@@ -69,7 +69,7 @@ class DepotExerciceView(VueAsynchrone, APIView):
             raise Http404
         if not matiere_resolvable(programme.matiere.nom):
             return None  # `executer` renverra le 400 habituel
-        if not (donnees["analyser"] and lecture_activee()):
+        if not (donnees["analyser"] and lecture_activee(request.user.id)):
             return None
         fichiers, empreintes = [], hashlib.sha256()
         for fichier, infos in zip(donnees.get("fichiers") or [], donnees["fichiers_valides"]):
@@ -109,7 +109,7 @@ class DepotExerciceView(VueAsynchrone, APIView):
 
         fichiers = donnees["fichiers_valides"]
 
-        analyse_disponible = lecture_activee()
+        analyse_disponible = lecture_activee(request.user.id)
         resultat = None
         if donnees["analyser"] and analyse_disponible:
             try:
@@ -142,8 +142,8 @@ class DepotExerciceView(VueAsynchrone, APIView):
             "enregistre": False,
             "traite": False,
             "analyse_disponible": analyse_disponible,
-            "correction_disponible": analyse_disponible and correction_activee(),
-            "professeur_disponible": analyse_disponible and professeur_actif(),
+            "correction_disponible": analyse_disponible and correction_activee(request.user.id),
+            "professeur_disponible": analyse_disponible and professeur_actif(request.user.id),
             "analysee": resultat is not None,
             "analyse": resultat.analyse if resultat else None,
             "analyse_depuis_cache": resultat.depuis_cache if resultat else False,

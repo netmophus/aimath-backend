@@ -71,6 +71,14 @@ class IADesactivee(RefusBudget):
     message = "Service temporairement indisponible. Réessaie plus tard."
 
 
+class IANonAutorisee(RefusBudget):
+    """Mode pilote : ce compte ne figure pas dans la liste blanche (IA_COMPTES_AUTORISES). Rien n'a été envoyé."""
+
+    statut_http = 503
+    code = "ia_non_autorisee"
+    message = "Service IA indisponible."
+
+
 class OperationDejaEnCours(RefusBudget):
     statut_http = 409
     code = "deja_en_cours"

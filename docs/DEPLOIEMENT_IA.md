@@ -66,3 +66,27 @@ Défaut : `claude-sonnet-5-5` (tarifs 2 USD entrée, 10 USD sortie par million d
 officielle). Le SDK installé (anthropic 1.5.0) transmet l'identifiant tel quel, mais ne le liste pas dans ses types :
 l'accès réel du compte Anthropic ne peut être confirmé que par le test réel (`test_integration_ia`). Si `IA_MODELE` est
 défini sur Heroku, il l'emporte sur ce défaut. Les tarifs restent surchargeables par `IA_TARIFS_USD`.
+
+## Liste blanche de comptes de développement (mode pilote)
+
+`IA_COMPTES_AUTORISES` = téléphones d'élèves séparés par des virgules (variable Heroku, jamais journalisée).
+
+- Vide (défaut) : comportement habituel. En production, les fonctions restent fermées tant que `IA_*_DEV_SEULEMENT=True`.
+- Non vide : chaque fonction (`IA_LECTURE_ACTIVE`, `IA_CORRECTION_ACTIVE`, `IA_PROF_ACTIVE`) n'est ouverte QU'aux élèves actifs de
+  la liste ; `IA_*_DEV_SEULEMENT` n'a plus d'effet (la liste le remplace). Les autres élèves voient le service comme désactivé
+  (`*_disponible` à false, 503 `correction_desactivee` / `professeur_desactive`, dépôt simple sans IA) : aucune tâche, aucune
+  opération, aucun appel.
+- Fermé par défaut : un numéro inexistant ou mal saisi n'ouvre rien à personne d'autre.
+- Double contrôle : aux portes d'entrée (vues) ET dans `budget_ia.service.ouvrir`, passage obligé de tout appel payant, y compris
+  l'exécution différée par le worker (compte retiré de la liste après la mise en file : aucun appel, `ia_non_autorisee`).
+- Quotas (3 exercices par jour, 10 interactions par exercice) et budget (seuil 90 000 FCFA) s'appliquent aux comptes listés.
+- Rapport admin `/api/admin/budget-ia/` : `mode_pilote` et `comptes_autorises` (nombre seulement, jamais les numéros).
+- Test de la chaîne complète (soumission, 202, worker, consultation, lecture, correction, fahimta ai) : définir `IA_COMPTES_AUTORISES`
+  avec le seul compte de développement, `IA_TRAITEMENT_ASYNCHRONE=True` et les trois `IA_*_ACTIVE=True`, puis retirer ces réglages
+  (ou vider la liste et remettre les drapeaux à False) à la fin. Retour arrière immédiat : `IA_INTERRUPTEUR_GLOBAL=False`.
+- Numéros validés strictement (format `+227` suivi de 8 chiffres, comme à l'inscription) : une entrée mal formée est ignorée, jamais corrigée.
+  Tant que la variable n'est pas vide, le mode pilote reste actif : une liste entièrement erronée ferme tout, elle n'ouvre rien.
+  `python manage.py check` signale `budget_ia.W001` (nombre d'entrées mal formées, sans les numéros).
+- Compte retiré de la liste (ou désactivé) après la mise en file : le worker clôt la tâche en 503 `ia_non_autorisee`, message élève
+  « Service IA indisponible. », AVANT toute exécution : aucun appel fournisseur, aucune opération (donc aucun quota consommé), aucune tâche
+  bloquée. Les opérations déjà ouvertes par une tentative précédente restent comptées (facturées ou à réconcilier).

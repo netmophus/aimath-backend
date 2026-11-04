@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db.models import Count, F, Sum, Value
 from django.db.models.functions import Greatest
 
+from . import acces
 from .models import AlerteBudgetIA, BudgetMensuel, OperationIA
 from .service import mois_et_jour
 
@@ -54,6 +55,10 @@ def rapport_mensuel(mois: str | None = None) -> dict:
         "taches": {s: TacheIA.objects.filter(statut=s).count() for s in ("en_attente", "en_cours", "echouee")},
         "marge_securite": str(settings.IA_MARGE_SECURITE),
         "interrupteur_global": bool(settings.IA_INTERRUPTEUR_GLOBAL),
+        # Mode pilote : seul le NOMBRE de comptes autorisés est exposé, jamais les numéros.
+        "mode_pilote": acces.mode_pilote(),
+        "comptes_autorises": len(acces.comptes_autorises()),
+        "entrees_invalides": acces.entrees_invalides(),
         "exercices_traites": ops.exclude(exercice_cle="").filter(statut__in=(S.TERMINEE, S.INCONNUE)).values("exercice_cle").distinct().count(),
         "appels_anthropic": appels.count(),
         "echecs": ops.filter(statut=S.ECHOUEE).count(),

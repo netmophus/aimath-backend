@@ -99,8 +99,8 @@ class _BaseView(APIView):
             _programmes_de_la_classe(request.user).select_related("matiere", "niveau", "serie").filter(pk=programme_id).first()
         )
 
-    def _garde(self):
-        if not seance.professeur_actif():
+    def _garde(self, request):
+        if not seance.professeur_actif(request.user.id):
             return _erreur("Le Professeur particulier n'est pas encore disponible.", status.HTTP_503_SERVICE_UNAVAILABLE, "professeur_desactive")
         return None
 
@@ -131,7 +131,7 @@ class SeancesView(VueAsynchrone, _BaseView):
         programme = self._programme(request, identifiant) if identifiant is not None else None
         if identifiant is not None and programme is None:
             raise Http404
-        if (refus := self._garde()) is not None:
+        if (refus := self._garde(request)) is not None:
             return refus
         serializer = DemarrerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -151,7 +151,7 @@ class SeancesView(VueAsynchrone, _BaseView):
         programme = self._programme(request, identifiant) if identifiant is not None else None
         if identifiant is not None and programme is None:
             raise Http404
-        if (refus := self._garde()) is not None:
+        if (refus := self._garde(request)) is not None:
             return refus
         serializer = DemarrerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -183,7 +183,7 @@ class _SeanceView(_BaseView):
         return etat
 
     def _traiter(self, request, id_seance, action):
-        if (refus := self._garde()) is not None:
+        if (refus := self._garde(request)) is not None:
             return refus
 
         def operation():
@@ -211,7 +211,7 @@ class _SeanceView(_BaseView):
 
 class SeanceDetailView(_SeanceView):
     def get(self, request, id):
-        if (refus := self._garde()) is not None:
+        if (refus := self._garde(request)) is not None:
             return refus
         return self._executer(lambda: _reponse_etat(self._charger(request, id)))
 
@@ -220,7 +220,7 @@ class ReponseView(VueAsynchrone, _SeanceView):
     serializer_class = ReponseSerializer
 
     def preparer(self, request, id):
-        if (refus := self._garde()) is not None:
+        if (refus := self._garde(request)) is not None:
             return refus
         donnees = self.serializer_class(data=request.data)
         donnees.is_valid(raise_exception=True)
@@ -240,7 +240,7 @@ class ExplicationView(VueAsynchrone, _SeanceView):
     serializer_class = ExplicationSerializer
 
     def preparer(self, request, id):
-        if (refus := self._garde()) is not None:
+        if (refus := self._garde(request)) is not None:
             return refus
         donnees = self.serializer_class(data=request.data)
         donnees.is_valid(raise_exception=True)

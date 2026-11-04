@@ -26,6 +26,7 @@ from django.utils.datastructures import MultiValueDict
 from django.utils.module_loading import import_string
 from rest_framework.exceptions import APIException
 
+from budget_ia import acces
 from budget_ia import service as budget
 from programme.ia.exceptions import RefusBudget
 
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 S = TacheIA.Statut
 ACTIVES = (S.EN_ATTENTE, S.EN_COURS)
 MESSAGE_INDISPONIBLE = "Service temporairement indisponible. Réessaie plus tard."
+MESSAGE_IA_INDISPONIBLE = "Service IA indisponible."
 
 
 class TropDeTaches(RefusBudget):
@@ -132,6 +134,12 @@ def executer(tache: TacheIA) -> TacheIA:
     utilisateur = tache.utilisateur
     if utilisateur.role != User.Role.ELEVE or utilisateur.statut != User.Statut.ACTIF:
         _clore(tache, S.TERMINEE, 403, {"detail": "Accès refusé."}, "non_autorise")
+        return tache
+    if acces.mode_pilote() and not acces.compte_autorise(tache.utilisateur_id):
+        # Mode pilote : compte retiré de la liste blanche après la mise en file. Refus explicite AVANT toute exécution : aucun
+        # appel fournisseur, aucune opération créée (donc aucun quota consommé). Les opérations déjà ouvertes par une tentative
+        # précédente de cette tâche ne sont pas touchées : elles restent comptées (facturées ou à réconcilier).
+        _clore(tache, S.TERMINEE, 503, {"detail": MESSAGE_IA_INDISPONIBLE, "code": "ia_non_autorisee"}, "ia_non_autorisee")
         return tache
     try:
         vue = import_string(tache.vue)()

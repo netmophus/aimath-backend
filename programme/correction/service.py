@@ -74,12 +74,11 @@ class ResultatCorrection:
     tokens_sortie: int | None = None
 
 
-def correction_activee() -> bool:
-    if not settings.IA_INTERRUPTEUR_GLOBAL or not settings.IA_CORRECTION_ACTIVE:
-        return False
-    if settings.IA_CORRECTION_DEV_SEULEMENT and not settings.DEBUG:
-        return False
-    return True
+def correction_activee(utilisateur_id: int | None = None) -> bool:
+    """Voir budget_ia.acces : mode pilote (liste blanche) ou, à défaut, IA_CORRECTION_DEV_SEULEMENT."""
+    from budget_ia.acces import fonction_ouverte
+
+    return fonction_ouverte(settings.IA_CORRECTION_ACTIVE, settings.IA_CORRECTION_DEV_SEULEMENT, utilisateur_id)
 
 
 # --- Admissibilité ----------------------------------------------------------

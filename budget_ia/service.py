@@ -38,6 +38,7 @@ from programme.ia.exceptions import (
     BudgetEpuise,
     IAConfigurationInvalide,
     IADesactivee,
+    IANonAutorisee,
     LimiteExerciceAtteinte,
     LimiteInteractionsAtteinte,
     LimiteJourAtteinte,
@@ -45,7 +46,7 @@ from programme.ia.exceptions import (
     OperationDejaEnCours,
 )
 
-from . import tarifs
+from . import acces, tarifs
 from .models import AlerteBudgetIA, BudgetMensuel, OperationIA
 
 logger = logging.getLogger(__name__)
@@ -243,6 +244,9 @@ def ouvrir(*, fonctionnalite: str, modele: str, tokens_entree: int, tokens_sorti
     if pour_un_eleve and (ctx is None or not ctx.utilisateur_id or not ctx.exercice_cle):
         # Fermé par défaut : aucun appel élève sans identité ni exercice (ne doit jamais échapper au contrôle).
         raise IAConfigurationInvalide("Contexte budgétaire absent : appel refusé.")
+    if pour_un_eleve and acces.mode_pilote() and not acces.compte_autorise(ctx.utilisateur_id):
+        # Mode pilote : dernier verrou, valable aussi pour une tâche différée exécutée par le worker.
+        raise IANonAutorisee()
 
     mois, jour = mois_et_jour()
     plein = False

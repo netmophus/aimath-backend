@@ -336,6 +336,9 @@ LOGGING = {
 # Interrupteur global : False coupe TOUS les appels Anthropic (lecture, correction, fahimta ai, contenu admin)
 # sans toucher aux autres fonctionnalités. Les trois IA_*_ACTIVE restent nécessaires en plus.
 IA_INTERRUPTEUR_GLOBAL = config('IA_INTERRUPTEUR_GLOBAL', default=True, cast=bool)
+# Liste blanche (« mode pilote ») : téléphones d'élèves séparés par des virgules. Vide = comportement historique. Non vide =
+# les fonctions IA ne sont ouvertes qu'à ces comptes (voir budget_ia/acces.py). Les numéros ne sont jamais journalisés.
+IA_COMPTES_AUTORISES = config('IA_COMPTES_AUTORISES', default='', cast=lambda v: [x.strip().replace(' ', '') for x in v.split(',') if x.strip()])
 BUDGET_IA_MENSUEL_FCFA = config('BUDGET_IA_MENSUEL_FCFA', default=100000, cast=int)       # plafond de référence
 BUDGET_IA_SEUIL_OPERATIONNEL_FCFA = config('BUDGET_IA_SEUIL_OPERATIONNEL_FCFA', default=90000, cast=int)  # blocage réel
 # Taux USD/FCFA : valeur PRUDENTE (au-dessus de la fourchette observée 574 à 597 en juillet 2026, sources non officielles).

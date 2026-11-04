@@ -65,7 +65,7 @@ class CorrectionExerciceView(VueAsynchrone, APIView):
             _programmes_de_la_classe(request.user).filter(pk=identifiant).exists()
         ):
             raise Http404
-        if not correction_activee():
+        if not correction_activee(request.user.id):
             return Response(
                 {"detail": "La correction complète n'est pas encore disponible.", "code": "correction_desactivee"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -96,7 +96,7 @@ class CorrectionExerciceView(VueAsynchrone, APIView):
         if programme is None and identifiant is not None:
             raise Http404
 
-        if not correction_activee():
+        if not correction_activee(request.user.id):
             return Response(
                 {"detail": "La correction complète n'est pas encore disponible.", "code": "correction_desactivee"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,

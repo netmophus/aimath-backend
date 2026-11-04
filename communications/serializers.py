@@ -70,7 +70,7 @@ def parametres_dict() -> dict:
     p = ParametresCommunication.charger()
     return {
         "lien_whatsapp": p.lien_whatsapp,
-        "envois_actifs": bool(settings.COMMUNICATIONS_SMS_ACTIVES),
+        "envois_actifs": services.envois_possibles_selon_reglages(),
         "fournisseur": getattr(settings, "COMMUNICATIONS_FOURNISSEUR", "simule"),
         "livraison_confirmee": False,
         "file_attente": services.file_attente(),
@@ -98,7 +98,7 @@ def campagne_dict(c: Campagne, avec_apercu: bool = False) -> dict:
         data["texte_exemple"] = (services.rendre(c.texte, premier.utilisateur, lien)
                                  if premier and premier.utilisateur else c.texte)
         data["budget"] = budget()
-        data["envois_actifs"] = bool(settings.COMMUNICATIONS_SMS_ACTIVES)
+        data["envois_actifs"] = services.envois_possibles_selon_reglages()
     return data
 
 

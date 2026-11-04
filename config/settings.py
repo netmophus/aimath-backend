@@ -409,6 +409,10 @@ IA_WORKER_INTERVALLE_SECONDES = config('IA_WORKER_INTERVALLE_SECONDES', default=
 # ---------------------------------------------------------------------------
 COMMUNICATIONS_SMS_ACTIVES = config('COMMUNICATIONS_SMS_ACTIVES', default=False, cast=bool)
 COMMUNICATIONS_FOURNISSEUR = config('COMMUNICATIONS_FOURNISSEUR', default='simule')
+# Le fournisseur 'simule' n'envoie rien mais enregistrerait des messages comme "acceptes" : il n'est autorise qu'en
+# developpement (DEBUG) et pendant les tests. Volontairement NON configurable par variable d'environnement.
+import sys as _sys
+COMMUNICATIONS_SIMULE_AUTORISE = bool(DEBUG) or 'test' in _sys.argv
 COMMUNICATIONS_DEBIT_PAR_MINUTE = config('COMMUNICATIONS_DEBIT_PAR_MINUTE', default=60, cast=int)
 COMMUNICATIONS_LOT = config('COMMUNICATIONS_LOT', default=20, cast=int)
 COMMUNICATIONS_TIMEOUT_REPRISE_MIN = config('COMMUNICATIONS_TIMEOUT_REPRISE_MIN', default=10, cast=int)

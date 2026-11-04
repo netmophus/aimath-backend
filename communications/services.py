@@ -261,9 +261,21 @@ def preparer(auteur, cle: str, type_: str, texte: str, mode: str, ids, filtres: 
 
 # --------------------------------------------------------------------------- confirmation, arrêt, reprise
 
+def simule_interdit() -> bool:
+    """Vrai si le fournisseur simulé est configuré hors développement et tests : il enregistrerait de faux « acceptés »."""
+    return (getattr(settings, "COMMUNICATIONS_FOURNISSEUR", "simule") == "simule"
+            and not getattr(settings, "COMMUNICATIONS_SIMULE_AUTORISE", False))
+
+
+def envois_possibles_selon_reglages() -> bool:
+    return bool(settings.COMMUNICATIONS_SMS_ACTIVES) and not simule_interdit()
+
+
 def _exiger_envois_actifs():
     if not settings.COMMUNICATIONS_SMS_ACTIVES:
         raise ErreurMetier("Les envois de SMS sont désactivés sur cet environnement.", 409, "envois_desactives")
+    if simule_interdit():
+        raise ErreurMetier("Le fournisseur simulé est interdit en production : aucun envoi.", 409, "fournisseur_simule_interdit")
 
 
 def confirmer(campagne_id: int, auteur, attestation: bool):
@@ -405,6 +417,7 @@ def _reserver_un() -> int | None:
 MOTIFS_GARDE = {
     "envois_desactives": "Les envois sont désactivés (COMMUNICATIONS_SMS_ACTIVES est faux).",
     "fournisseur_inconnu": "Le fournisseur configuré (COMMUNICATIONS_FOURNISSEUR) est inconnu : aucun envoi.",
+    "fournisseur_simule_interdit": "Le fournisseur simulé est interdit en production : il enregistrerait de faux envois.",
     "plafond_absent": "Aucun plafond mensuel n'est défini.",
     "tarif_absent": "Le coût d'un SMS n'est pas renseigné.",
     "plafond_depasse": "Le plafond mensuel est dépassé.",
@@ -418,6 +431,8 @@ def garde_envoi() -> str | None:
         return "envois_desactives"
     if getattr(settings, "COMMUNICATIONS_FOURNISSEUR", "simule") not in FOURNISSEURS:
         return "fournisseur_inconnu"   # jamais de repli silencieux sur le simulé : il « accepterait » sans rien envoyer
+    if simule_interdit():
+        return "fournisseur_simule_interdit"
     p = ParametresCommunication.charger()
     if not p.plafond_mensuel_fcfa:
         return "plafond_absent"

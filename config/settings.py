@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'comptes',
     'budget_ia',
     'traitement_ia',
+    'aide',
 ]
 
 AUTH_USER_MODEL = 'comptes.User'

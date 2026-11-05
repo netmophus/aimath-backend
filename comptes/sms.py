@@ -71,14 +71,17 @@ def normaliser_telephone_sms(telephone: str) -> str:
     return chiffres
 
 
-def envoyer_sms(telephone: str, texte: str) -> bool:
+def envoyer_sms(telephone: str, texte: str, journaliser_texte: bool = True) -> bool:
     """POST vers LAM_SMS_URL — NE LÈVE JAMAIS (voir docstring de module).
     Retourne True si le SMS a été accepté par LAM (ou simulé en mode mock),
     False sinon — jamais d'exception propagée à l'appelant."""
     to = normaliser_telephone_sms(telephone)
 
     if settings.SMS_MOCK:
-        logger.info("[SMS_MOCK] to=%s texte=%r", to, texte)
+        if journaliser_texte:
+            logger.info("[SMS_MOCK] to=%s texte=%r", to, texte)
+        else:   # code de vérification : jamais dans les journaux
+            logger.info("[SMS_MOCK] envoi simulé (texte non journalisé)")
         return True
 
     if not all(

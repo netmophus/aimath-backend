@@ -120,6 +120,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     # l'instant, à exploiter côté front pour forcer un changement.
     doit_changer_mdp = models.BooleanField("doit changer son mot de passe", default=False)
 
+    # Version du mot de passe : +1 à chaque changement (volontaire, forcé, récupération par OTP, réinitialisation par un
+    # admin). Chaque jeton JWT porte la version courante à son émission ; une version différente est refusée (voir
+    # comptes/authentification.py). Un compteur, et non une date : l'horodatage `iat` d'un jeton n'a qu'une résolution
+    # d'une seconde et ne distingue pas un jeton émis juste avant ou juste après un changement dans la même seconde.
+    version_mot_de_passe = models.PositiveIntegerField("version du mot de passe", default=0)
+
     # Renseigné par un admin lors d'un rejet (voir comptes/admin_views.py).
     # Remis à vide si le compte est ensuite approuvé.
     motif_rejet = models.TextField("motif du rejet", blank=True, null=True)
@@ -195,8 +201,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self) -> str:
         return f"{self.prenom} {self.nom} ({self.telephone})"
 
+    def set_password(self, raw_password):
+        super().set_password(raw_password)
+        self.version_mot_de_passe = (self.version_mot_de_passe or 0) + 1
+
     def save(self, *args, **kwargs):
         self.telephone = UserManager.normalize_telephone(self.telephone)
+        champs = kwargs.get("update_fields")
+        if champs is not None and "password" in champs and "version_mot_de_passe" not in champs:
+            # Les parcours existants enregistrent update_fields=["password", ...] : la version doit suivre le mot de passe.
+            kwargs["update_fields"] = [*champs, "version_mot_de_passe"]
         super().save(*args, **kwargs)
 
     @property

@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/admin/aide/', include('aide.admin_urls')),
     path('api/admin/communications/', include('communications.urls')),
     path('api/eleve/communication/', include('communications.eleve_urls')),
+    path('api/auth/mot-de-passe-oublie/', include('recuperation.urls')),
     path('api/eleve/', include('programme.eleve_urls')),
     path('api/vendeur/', include('comptes.vendeur_urls')),
     # PUBLIC (webhook NITA, voir comptes.nita_views.NitaCallbackView) —

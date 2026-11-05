@@ -9,6 +9,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from programme.models import Cycle, Niveau, Serie
 
+from .jetons import RefreshVersionne
 from .models import CarteFahimta, User
 
 TELEPHONE_RE = re.compile(r"^\+227\d{8}$")
@@ -125,6 +126,8 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
     compte est "actif" ; sinon lève une erreur 403 avec un message adapté
     au statut du compte.
     """
+
+    token_class = RefreshVersionne   # le jeton porte la version du mot de passe (comptes/authentification.py)
 
     MESSAGES_STATUT = {
         User.Statut.EN_ATTENTE: "Ce compte est en attente de validation par un administrateur.",
@@ -287,3 +290,25 @@ class ChangerMotDePasseSerializer(serializers.Serializer):
         except DjangoValidationError as exc:
             raise serializers.ValidationError(list(exc.messages))
         return value
+
+
+class ModifierMotDePasseSerializer(serializers.Serializer):
+    """POST /api/auth/modifier-mot-de-passe/ — changement volontaire : mot de passe actuel + nouveau + confirmation.
+    Le mot de passe actuel est vérifié par la vue (check_password) ; il n'est jamais journalisé ni renvoyé."""
+
+    mot_de_passe_actuel = serializers.CharField(write_only=True, trim_whitespace=False)
+    nouveau_mot_de_passe = serializers.CharField(write_only=True, trim_whitespace=False)
+    confirmation = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs):
+        utilisateur = self.context["request"].user
+        nouveau = attrs["nouveau_mot_de_passe"]
+        if nouveau != attrs["confirmation"]:
+            raise serializers.ValidationError({"confirmation": ["Les deux mots de passe ne correspondent pas."]})
+        if attrs["mot_de_passe_actuel"] == nouveau:
+            raise serializers.ValidationError({"nouveau_mot_de_passe": ["Le nouveau mot de passe doit être différent de l'actuel."]})
+        try:
+            validate_password(nouveau, user=utilisateur)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"nouveau_mot_de_passe": list(exc.messages)})
+        return attrs

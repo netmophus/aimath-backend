@@ -19,9 +19,17 @@ from .cartes import (
     reinitialiser_echecs,
     trop_de_tentatives,
 )
+from .jetons import RefreshVersionne
 from .models import CarteFahimta
 from .permissions import IsEleveActif
 from .sms import envoyer_sms
+from recuperation.services import (
+    ErreurRecuperation,
+    effacer_echecs_changement,
+    enregistrer_echec_changement,
+    ip_client,
+    verifier_blocage_changement,
+)
 from .serializers import (
     ActiverCarteSerializer,
     CarteRecueEleveSerializer,
@@ -29,6 +37,7 @@ from .serializers import (
     CyclePublicSerializer,
     InscriptionEleveSerializer,
     MeSerializer,
+    ModifierMotDePasseSerializer,
     ProfilEleveSerializer,
     TelephoneTokenObtainPairSerializer,
 )
@@ -98,28 +107,74 @@ class MeView(generics.RetrieveAPIView):
         return self.request.user
 
 
+def _jetons_pour(user) -> dict:
+    """Nouveaux jetons pour l'appareil courant : les anciens sont refusés après un changement de mot de passe."""
+    refresh = RefreshVersionne.for_user(user)
+    return {"access": str(refresh.access_token), "refresh": str(refresh)}
+
+
 class ChangerMotDePasseView(APIView):
     """
     POST /api/auth/changer-mot-de-passe/ — { "nouveau_mot_de_passe" }
 
-    Ouvert à tout utilisateur authentifié, quel que soit son rôle ou son
-    statut (pas IsEleveActif) : il doit rester joignable pendant le
-    changement forcé qui suit une réinitialisation. Agit TOUJOURS sur
-    request.user. Lève le drapeau doit_changer_mdp.
+    Changement FORCÉ uniquement (après réinitialisation par un admin) : réservé aux comptes actifs dont
+    doit_changer_mdp est vrai. Pour un changement volontaire, voir ModifierMotDePasseView (ancien mot de passe exigé).
+    Agit TOUJOURS sur request.user. Renvoie de nouveaux jetons : les anciens sont invalidés.
     """
 
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        user = request.user
+        if not user.doit_changer_mdp or user.statut != user.Statut.ACTIF:
+            return Response({"detail": "Changement non autorisé par ce parcours. Utilise « Modifier mon mot de passe »."},
+                            status=status.HTTP_403_FORBIDDEN)
         serializer = ChangerMotDePasseSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
-        user = request.user
         user.set_password(serializer.validated_data["nouveau_mot_de_passe"])
         user.doit_changer_mdp = False
         user.save(update_fields=["password", "doit_changer_mdp"])
 
-        return Response({"message": "Mot de passe modifié."})
+        return Response({"message": "Mot de passe modifié.", **_jetons_pour(user)})
+
+
+class ModifierMotDePasseView(APIView):
+    """
+    POST /api/auth/modifier-mot-de-passe/ — { "mot_de_passe_actuel", "nouveau_mot_de_passe", "confirmation" }
+
+    Changement VOLONTAIRE d'un utilisateur connecté et actif. Le mot de passe actuel est vérifié (check_password) ;
+    5 erreurs en 15 minutes verrouillent temporairement le changement. Ne touche jamais doit_changer_mdp à la
+    hausse. Les autres sessions sont invalidées ; de nouveaux jetons sont renvoyés pour l'appareil courant.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.statut != user.Statut.ACTIF:
+            return Response({"detail": "Compte non actif."}, status=status.HTTP_403_FORBIDDEN)
+        ip = ip_client(request)
+        try:
+            verifier_blocage_changement(user, ip)
+        except ErreurRecuperation as exc:
+            reponse = Response({"detail": exc.message}, status=exc.statut_http)
+            if exc.retry_after:
+                reponse["Retry-After"] = str(exc.retry_after)
+            return reponse
+
+        serializer = ModifierMotDePasseSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        actuel = serializer.validated_data["mot_de_passe_actuel"]
+        if not user.check_password(actuel):
+            enregistrer_echec_changement(user, ip)
+            return Response({"mot_de_passe_actuel": ["Mot de passe actuel incorrect."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(serializer.validated_data["nouveau_mot_de_passe"])
+        user.save(update_fields=["password"])
+        effacer_echecs_changement(user)
+        return Response({"message": "Mot de passe modifié.", **_jetons_pour(user)})
 
 
 class ProfilEleveView(generics.RetrieveUpdateAPIView):

@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'traitement_ia',
     'aide',
     'communications',
+    'recuperation',
 ]
 
 AUTH_USER_MODEL = 'comptes.User'
@@ -196,7 +197,7 @@ if not DEBUG:
 # Configuration REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'comptes.authentification.JWTAuthenticationVersionnee',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
@@ -417,3 +418,31 @@ COMMUNICATIONS_DEBIT_PAR_MINUTE = config('COMMUNICATIONS_DEBIT_PAR_MINUTE', defa
 COMMUNICATIONS_LOT = config('COMMUNICATIONS_LOT', default=20, cast=int)
 COMMUNICATIONS_TIMEOUT_REPRISE_MIN = config('COMMUNICATIONS_TIMEOUT_REPRISE_MIN', default=10, cast=int)
 COMMUNICATIONS_APERCU_VALIDITE_MIN = config('COMMUNICATIONS_APERCU_VALIDITE_MIN', default=60, cast=int)
+
+# ---------------------------------------------------------------------------
+#  Recuperation de mot de passe par code SMS (app recuperation). Service d'authentification : independant des campagnes
+#  Communications, de leur plafond et de leur worker. Aucun envoi reel tant que OTP_SMS_ACTIFS est faux.
+#  Les plafonds comptent des SMS (pas des FCFA) : ils bornent la depense quel que soit le tarif.
+# ---------------------------------------------------------------------------
+OTP_SMS_ACTIFS = config('OTP_SMS_ACTIFS', default=False, cast=bool)
+OTP_VALIDITE_MINUTES = config('OTP_VALIDITE_MINUTES', default=5, cast=int)
+OTP_MAX_TENTATIVES = config('OTP_MAX_TENTATIVES', default=5, cast=int)
+OTP_AUTORISATION_VALIDITE_MINUTES = config('OTP_AUTORISATION_VALIDITE_MINUTES', default=10, cast=int)
+OTP_DELAI_RENVOI_SECONDES = config('OTP_DELAI_RENVOI_SECONDES', default=60, cast=int)
+OTP_MAX_DEMANDES_PAR_NUMERO_HEURE = config('OTP_MAX_DEMANDES_PAR_NUMERO_HEURE', default=3, cast=int)
+OTP_MAX_DEMANDES_PAR_IP_HEURE = config('OTP_MAX_DEMANDES_PAR_IP_HEURE', default=10, cast=int)
+OTP_MAX_DEMANDES_GLOBAL_HEURE = config('OTP_MAX_DEMANDES_GLOBAL_HEURE', default=200, cast=int)
+OTP_MAX_ECHECS_PAR_IP_HEURE = config('OTP_MAX_ECHECS_PAR_IP_HEURE', default=30, cast=int)
+# Budget en SEGMENTS SMS, independant des campagnes Communications. Lancement : 200 segments par mois. Aucun tarif
+# commercial n'est code : le cout se deduit du fournisseur, le plafond borne la depense quel que soit le tarif.
+OTP_PLAFOND_SMS_JOUR = config('OTP_PLAFOND_SMS_JOUR', default=50, cast=int)
+OTP_PLAFOND_SMS_MOIS = config('OTP_PLAFOND_SMS_MOIS', default=200, cast=int)
+# Secret DEDIE a la reconstitution des codes (32 caracteres minimum, variable d'environnement uniquement, jamais dans
+# le depot). Obligatoire quand OTP_SMS_ACTIFS est vrai ; sans lui, le service repond indisponible.
+OTP_CLE_SECRETE = config('OTP_CLE_SECRETE', default='')
+# Worker dedie `traiter_envoi_codes_otp` (file persistante EnvoiCodeSms).
+OTP_SONDAGE_SECONDES = config('OTP_SONDAGE_SECONDES', default=2, cast=int)
+OTP_BATTEMENT_MAX_SECONDES = config('OTP_BATTEMENT_MAX_SECONDES', default=60, cast=int)   # worker silencieux => indisponible
+OTP_ATTENTE_MAX_SECONDES = config('OTP_ATTENTE_MAX_SECONDES', default=45, cast=int)       # file en retard => indisponible
+OTP_DELAI_INTERRUPTION_SECONDES = config('OTP_DELAI_INTERRUPTION_SECONDES', default=120, cast=int)
+OTP_MAX_ESSAIS_ENVOI = config('OTP_MAX_ESSAIS_ENVOI', default=2, cast=int)   # seulement si RIEN n'a pu partir

@@ -27,7 +27,7 @@ from programme.professeur import ia as ia_prof
 from programme.professeur import tour
 
 S = OperationIA.Statut
-SOUS_CLE = override_settings(IA_TARIFS_USD=TARIFS_TEST, ANTHROPIC_API_KEY="cle-secrete-factice", BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=90000)
+SOUS_CLE = override_settings(IA_TARIFS_USD=TARIFS_TEST, ANTHROPIC_API_KEY="cle-secrete-factice", BUDGET_IA_PLAFOND_ACTIF=True, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=90000)
 
 
 def ouvrir(fonction="lecture", **kw):
@@ -142,7 +142,7 @@ class AppelsSdkTests(TestCase):
 
 @override_settings(IA_TARIFS_USD=TARIFS_TEST, ANTHROPIC_API_KEY="cle-secrete-factice", IA_LECTURE_ACTIVE=True, IA_LECTURE_DEV_SEULEMENT=False,
                    IA_CORRECTION_ACTIVE=True, IA_CORRECTION_DEV_SEULEMENT=False, IA_PROF_ACTIVE=True, IA_PROF_DEV_SEULEMENT=False,
-                   IA_MODELE="m", IA_LECTURE_MODELE="", IA_CORRECTION_MODELE="", IA_PROF_MODELE="", BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=90000)
+                   IA_MODELE="m", IA_LECTURE_MODELE="", IA_CORRECTION_MODELE="", IA_PROF_MODELE="", BUDGET_IA_PLAFOND_ACTIF=True, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=90000)
 class VuesTests(TestCase):
     """Vraies vues DRF + faux SDK : codes HTTP, messages élève, aucun secret, aucun appel quand un contrôle refuse."""
 
@@ -263,7 +263,7 @@ class ConcurrenceTests(TransactionTestCase):
             f.join(60)
         return resultats
 
-    @override_settings(IA_TARIFS_USD=TARIFS_TEST, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=40)   # 5 réservations de 7,92 tiennent (39,6)
+    @override_settings(IA_TARIFS_USD=TARIFS_TEST, BUDGET_IA_PLAFOND_ACTIF=True, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=40)   # 5 réservations de 7,92 tiennent (39,6)
     def test_requetes_simultanees_ne_depassent_jamais_le_plafond(self):
         eleves = [creer_eleve(f"+2279000{i:04d}") for i in range(12)]
 

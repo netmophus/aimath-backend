@@ -32,7 +32,7 @@ def instant(annee, mois, jour, h=12, mn=0):
     return datetime(annee, mois, jour, h, mn, tzinfo=fuseau_utc.utc)
 
 
-@override_settings(IA_TARIFS_USD=TARIFS_TEST, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=90000)
+@override_settings(IA_TARIFS_USD=TARIFS_TEST, BUDGET_IA_PLAFOND_ACTIF=True, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=90000)
 class BaseBudget(TestCase):
     def setUp(self):
         self.eleve = creer_eleve()
@@ -172,7 +172,7 @@ class FuseauEtMoisTests(BaseBudget):
                     budget.terminer(ouvrir(), None)
 
     def test_changement_de_mois_nouveau_budget(self):
-        with override_settings(BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=10):   # une seule opération (7,92) par mois
+        with override_settings(BUDGET_IA_PLAFOND_ACTIF=True, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=10):   # une seule opération (7,92) par mois
             with mock.patch("django.utils.timezone.now", return_value=instant(2026, 11, 15)):
                 with self.ctx("a"):
                     budget.terminer(ouvrir(), {"tokens_entree": 1000, "tokens_sortie": 1000})
@@ -263,13 +263,29 @@ class ReservationTests(BaseBudget):
         b = BudgetMensuel.objects.get()
         self.assertEqual((b.reserve_fcfa, b.depense_fcfa), (0, reel))      # le réel est compté ENTIÈREMENT
         self.assertAlmostEqual(rapport_mensuel()["depassement_estimation_fcfa"], float(reel - petit), places=3)
-        with override_settings(BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=int(reel) + 1), self.ctx("autre"):
+        with override_settings(BUDGET_IA_PLAFOND_ACTIF=True, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=int(reel) + 1), self.ctx("autre"):
             with self.assertRaises(BudgetEpuise):                           # et il pèse sur les opérations suivantes
                 ouvrir(tokens_entree=100_000, tokens_sortie_max=10_000)
 
 
+class PlafondDesactiveTests(BaseBudget):
+    """Plafond désactivé (réglage par défaut) : plus aucun refus budgétaire, mais la consommation reste comptée."""
+
+    @override_settings(BUDGET_IA_PLAFOND_ACTIF=False, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=10)
+    def test_aucun_refus_et_consommation_comptee(self):
+        with self.ctx():
+            for _ in range(5):   # 5 x 7,92 FCFA dépasse largement le seuil de 10 : aucun refus
+                budget.terminer(ouvrir("professeur_tour"), {"tokens_entree": 1000, "tokens_sortie": 1000})
+        b = BudgetMensuel.objects.get()
+        self.assertEqual(b.reserve_fcfa, 0)
+        self.assertGreater(b.depense_fcfa, 10)
+        self.assertEqual(OperationIA.objects.filter(statut=OperationIA.Statut.TERMINEE).count(), 5)
+        from budget_ia.rapport import rapport_mensuel
+        self.assertFalse(rapport_mensuel()["plafond_actif"])
+
+
 class AlertesEtBlocageTests(BaseBudget):
-    @override_settings(BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=97)
+    @override_settings(BUDGET_IA_PLAFOND_ACTIF=True, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=97)
     def test_alertes_une_seule_fois_puis_blocage_a_100(self):
         with self.ctx():
             for _ in range(10):   # 10 x 9,24 = 92,4 FCFA sur un plafond de 97 : franchit 80 % et 95 % sans le dépasser

@@ -160,7 +160,7 @@ class VuesEnModePiloteTests(BaseAsync):
 
     def test_le_budget_reste_applique_au_compte_liste(self):
         client = faux_sdk(analyse=ANALYSE)
-        with override_settings(IA_COMPTES_AUTORISES=[TEL_LISTE], BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=1), mock.patch("anthropic.Anthropic", return_value=client):
+        with override_settings(IA_COMPTES_AUTORISES=[TEL_LISTE], BUDGET_IA_PLAFOND_ACTIF=True, BUDGET_IA_SEUIL_OPERATIONNEL_FCFA=1), mock.patch("anthropic.Anthropic", return_value=client):
             t = self.tache(self.deposer_par(self.api))
             traiter_tout()
             e = self.etat(t)

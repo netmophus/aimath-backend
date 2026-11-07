@@ -21,6 +21,7 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 from .exceptions import (
+    IAErreur,
     IAConfigurationInvalide,
     IAErreurFournisseur,
     IAQuotaDepasse,
@@ -154,3 +155,147 @@ def _appeler_anthropic(system_prompt: str, user_prompt: str, *, max_tokens: int)
         stop_reason=stop_reason,
         tronque=tronque,
     )
+
+
+# --------------------------------------------------------------------------
+#  Streaming (génération longue, ex. « sujet type examen »)
+# --------------------------------------------------------------------------
+#
+#  Pourquoi : le routeur Heroku coupe (H12) toute requête dont le PREMIER octet
+#  n'est pas parti avant 30 s, puis impose 55 s sans octet. Une génération
+#  longue renvoyée d'un bloc dépasse 30 s. En streaming, des octets partent
+#  dès la connexion puis à chaque fragment de texte : plus de H12.
+#  Le décompte du budget IA reste identique (même `ouvrir`, même `terminer`
+#  avec l'usage réel du message final, même `echouer` si le flux casse).
+
+def _erreur_ia_depuis_sdk(exc: BaseException) -> IAErreur | None:
+    """Même traduction que `_appeler_anthropic`, pour le flux. None = pas une
+    erreur du SDK (on laisse alors l'exception d'origine repartir)."""
+    import anthropic
+
+    if isinstance(exc, anthropic.AuthenticationError):
+        return IAConfigurationInvalide("Clé API Anthropic refusée par le fournisseur (vérifie ANTHROPIC_API_KEY).")
+    if isinstance(exc, anthropic.RateLimitError):
+        return IAQuotaDepasse("Quota Anthropic atteint (429) : réessaie plus tard, ou vérifie le plan de facturation.")
+    if isinstance(exc, (anthropic.APITimeoutError, TimeoutError)):
+        return IATimeout(f"Le fournisseur IA n'a pas répondu dans le délai imparti ({settings.IA_TIMEOUT_SECONDES}s).")
+    if isinstance(exc, anthropic.APIConnectionError):
+        return IAErreurFournisseur("Impossible de joindre le fournisseur IA (problème réseau côté serveur).")
+    if isinstance(exc, anthropic.APIStatusError):
+        return IAErreurFournisseur(f"Le fournisseur IA a répondu une erreur ({exc.status_code}).")
+    if isinstance(exc, anthropic.AnthropicError):
+        return IAErreurFournisseur("Erreur inattendue côté fournisseur IA.")
+    return None
+
+
+class FluxIA:
+    """Appel IA en streaming PRÉPARÉ (clé vérifiée, budget réservé) mais pas
+    encore démarré. `deltas()` est un générateur : il produit chaque fragment
+    de texte (str non vide) et, de temps en temps, "" pour les événements sans
+    texte (battement : permet à l'appelant d'émettre un octet de vie). À la fin
+    normale, `reponse` contient la ReponseIA complète (même forme qu'`appeler_ia`)."""
+
+    def __init__(self, client, op, modele: str, system_prompt: str, user_prompt: str, max_tokens: int):
+        self._client = client
+        self._op = op
+        self._modele = modele
+        self._system = system_prompt
+        self._user = user_prompt
+        self._max_tokens = max_tokens
+        self.reponse: ReponseIA | None = None
+
+    def deltas(self):
+        from budget_ia import service as budget
+
+        solde = False
+        try:
+            with self._client.messages.stream(
+                model=self._modele,
+                max_tokens=self._max_tokens,
+                system=self._system,
+                messages=[{"role": "user", "content": self._user}],
+            ) as flux:
+                morceaux: list[str] = []
+                for evenement in flux:
+                    delta = getattr(evenement, "delta", None)
+                    if getattr(evenement, "type", None) == "content_block_delta" and getattr(delta, "type", None) == "text_delta":
+                        morceaux.append(delta.text)
+                        yield delta.text
+                    else:
+                        yield ""
+                final = flux.get_final_message()
+            solde = True
+            budget.terminer(self._op, budget.usage_de_reponse(final))
+        except BaseException as exc:  # noqa: BLE001 : y compris GeneratorExit (client parti) : résultat inconnu
+            if not solde:
+                budget.echouer(self._op, type(exc).__name__, resultat_inconnu=budget._resultat_inconnu(exc))
+            if isinstance(exc, Exception):
+                traduite = _erreur_ia_depuis_sdk(exc)
+                if traduite is not None:
+                    raise traduite from exc
+            raise
+
+        texte = "".join(
+            bloc.text for bloc in final.content if getattr(bloc, "type", None) == "text"
+        ).strip()
+        stop_reason = getattr(final, "stop_reason", None)
+        if not texte:
+            if stop_reason == "max_tokens":
+                raise IAReponseVide(
+                    "La génération a atteint la limite de tokens (IA_MAX_TOKENS_REPONSE) "
+                    "avant de produire le moindre texte. Augmente IA_MAX_TOKENS_REPONSE."
+                )
+            raise IAReponseVide("Le fournisseur IA a renvoyé une réponse vide.")
+
+        usage = getattr(final, "usage", None)
+        tokens_entree = getattr(usage, "input_tokens", None)
+        tokens_sortie = getattr(usage, "output_tokens", None)
+        logger.info(
+            "appel IA anthropic (flux) modele=%s tokens_entree=%s tokens_sortie=%s stop_reason=%s",
+            self._modele, tokens_entree, tokens_sortie, stop_reason,
+        )
+        self.reponse = ReponseIA(
+            texte=texte,
+            fournisseur='anthropic',
+            modele=self._modele,
+            tokens_entree=tokens_entree,
+            tokens_sortie=tokens_sortie,
+            stop_reason=stop_reason,
+            tronque=stop_reason == "max_tokens",
+        )
+
+
+def preparer_flux_ia(system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> FluxIA:
+    """Équivalent streaming d'`appeler_ia`. Fait TOUS les contrôles qui peuvent
+    refuser (fournisseur, clé, budget) tout de suite, avant que l'appelant
+    n'ouvre la réponse HTTP : un refus reste donc une vraie erreur HTTP JSON."""
+
+    fournisseur = (settings.IA_FOURNISSEUR or '').strip().lower()
+    max_tokens = max_tokens or settings.IA_MAX_TOKENS_REPONSE
+
+    if fournisseur != 'anthropic':
+        raise IAConfigurationInvalide(
+            f"Fournisseur IA inconnu : « {fournisseur or '(vide)'} ». "
+            "Vérifie le réglage IA_FOURNISSEUR dans le .env du serveur."
+        )
+    cle = settings.ANTHROPIC_API_KEY
+    if not cle:
+        raise IAConfigurationInvalide(
+            "Clé API Anthropic absente (ANTHROPIC_API_KEY dans le .env du serveur)."
+        )
+    try:
+        import anthropic
+    except ImportError as exc:
+        raise IAConfigurationInvalide(
+            "Le paquet Python 'anthropic' n'est pas installé sur le serveur."
+        ) from exc
+
+    modele = settings.IA_MODELE
+    client = anthropic.Anthropic(api_key=cle, timeout=float(settings.IA_TIMEOUT_SECONDES), max_retries=0)
+
+    from budget_ia import service as budget
+    op = budget.ouvrir(
+        fonctionnalite="contenu_admin", modele=modele, tokens_sortie_max=max_tokens,
+        tokens_entree=budget.estimer_entree(message=user_prompt, systeme=system_prompt),
+    )
+    return FluxIA(client, op, modele, system_prompt, user_prompt, max_tokens)

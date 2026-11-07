@@ -41,6 +41,7 @@ def rapport_mensuel(mois: str | None = None) -> dict:
         "mois": mois,
         "avertissement": "Montants estimés par FAHIMTA (tarif officiel x taux configuré x marge). Ne remplace pas la facture Anthropic.",
         "budget_reference_fcfa": _f(plafond),
+        "plafond_actif": bool(settings.BUDGET_IA_PLAFOND_ACTIF),
         "seuil_operationnel_fcfa": _f(seuil),
         "consomme_estime_fcfa": _f(depense),
         "reserve_en_cours_fcfa": _f(reserve),

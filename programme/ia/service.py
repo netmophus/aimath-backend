@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from ..models import Notion
 from .exceptions import IAErreur, SectionInconnue
-from .fournisseurs import appeler_ia
+from .fournisseurs import appeler_ia, preparer_flux_ia
 from .prompts import SECTIONS, charte_active_texte, construire_contexte_notion, construire_prompt
 
 DIFFICULTES_VALIDES = {"facile", "moyen", "difficile"}
@@ -42,7 +42,32 @@ def generer_section(
 
     system_prompt, user_prompt = construire_prompt(notion, section, prompt_perso=prompt_perso)
     reponse = appeler_ia(system_prompt, user_prompt)
+    return _resultat_depuis_reponse(section, reponse)
 
+
+def generer_section_flux(notion: Notion, section: str, prompt_perso: str | None = None):
+    """Version STREAMING de generer_section (contre le H12 Heroku sur les
+    générations longues). Les contrôles qui peuvent refuser (section inconnue,
+    clé, budget) ont lieu ICI, tout de suite : ils lèvent comme generer_section.
+    Renvoie un générateur d'événements :
+      ("delta", texte)              fragment de texte ("" = simple battement)
+      ("fin", ResultatGeneration)   dernier événement, même résultat qu'en non-streaming
+    Une IAErreur tardive (coupure, JSON d'exercices invalide...) est levée depuis
+    ce générateur."""
+
+    system_prompt, user_prompt = construire_prompt(notion, section, prompt_perso=prompt_perso)
+    flux = preparer_flux_ia(system_prompt, user_prompt)
+
+    def evenements():
+        for delta in flux.deltas():
+            yield ("delta", delta)
+        yield ("fin", _resultat_depuis_reponse(section, flux.reponse))
+
+    return evenements()
+
+
+def _resultat_depuis_reponse(section: str, reponse) -> ResultatGeneration:
+    """Mise en forme commune (bloc et flux) : parsing JSON des exercices ou texte brut."""
     spec = SECTIONS[section]
     if spec.sortie_json:
         if reponse.tronque:

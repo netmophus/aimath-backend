@@ -5,6 +5,11 @@ renvoient le contenu généré / l'avis, à charge du front (étape 2 — hors
 scope ici) de proposer l'aperçu puis l'insertion effective.
 """
 
+import json
+import logging
+import time
+
+from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -12,9 +17,11 @@ from rest_framework.views import APIView
 from comptes.permissions import IsAdminRole
 
 from .ia.exceptions import IAConfigurationInvalide, IAErreur, RefusBudget, SectionInconnue
-from .ia.service import generer_section, verifier_contenu
+from .ia.service import generer_section, generer_section_flux, verifier_contenu
 from .ia_serializers import GenererSectionSerializer, VerifierContenuSerializer
 from .models import Notion, PromptSectionNotion
+
+logger = logging.getLogger(__name__)
 
 _SELECT_RELATED_NOTION = (
     "chapitre__theme__programme__matiere",
@@ -66,6 +73,15 @@ class GenererSectionView(APIView):
             .first()
         )
 
+        if serializer.validated_data["stream"]:
+            try:
+                evenements = generer_section_flux(notion, section, prompt_perso=prompt_perso)
+            except SectionInconnue as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            except IAErreur as exc:  # refus avant tout flux (clé, budget...) : vraie erreur HTTP, comme sans stream
+                return Response({"detail": str(exc)}, status=_statut_pour_erreur(exc))
+            return _reponse_sse(evenements)
+
         try:
             resultat = generer_section(notion, section, prompt_perso=prompt_perso)
         except SectionInconnue as exc:
@@ -73,20 +89,65 @@ class GenererSectionView(APIView):
         except IAErreur as exc:
             return Response({"detail": str(exc)}, status=_statut_pour_erreur(exc))
 
-        # Le contenu partiel est renvoyé même tronqué (pour ne rien perdre),
-        # mais TOUJOURS accompagné de `tronque` — jamais présenté comme
-        # complet sans ce signal explicite. Voir ResultatGeneration.
-        data: dict = {"tronque": resultat.tronque}
-        if resultat.tronque:
-            data["message"] = (
-                "La génération a été coupée avant la fin (limite de tokens atteinte). "
-                "Le contenu est incomplet — régénère, ou complète-le manuellement avant de publier."
-            )
-        if isinstance(resultat.contenu, list):
-            data["exercices"] = resultat.contenu
-        else:
-            data["contenu"] = resultat.contenu
-        return Response(data)
+        return Response(_corps_generation(resultat))
+
+
+def _corps_generation(resultat) -> dict:
+    """Corps JSON d'une génération réussie (identique en bloc et dans l'événement
+    "fin" du flux). Le contenu partiel est renvoyé même tronqué (pour ne rien
+    perdre), mais TOUJOURS accompagné de `tronque` — jamais présenté comme
+    complet sans ce signal explicite. Voir ResultatGeneration."""
+    data: dict = {"tronque": resultat.tronque}
+    if resultat.tronque:
+        data["message"] = (
+            "La génération a été coupée avant la fin (limite de tokens atteinte). "
+            "Le contenu est incomplet — régénère, ou complète-le manuellement avant de publier."
+        )
+    if isinstance(resultat.contenu, list):
+        data["exercices"] = resultat.contenu
+    else:
+        data["contenu"] = resultat.contenu
+    return data
+
+
+def _sse(donnees: dict) -> str:
+    return "data: " + json.dumps(donnees, ensure_ascii=False) + "\n\n"
+
+
+def _reponse_sse(evenements) -> StreamingHttpResponse:
+    """Flux Server-Sent Events. Évènements JSON, un par message `data:` :
+      {"type":"delta","texte":"..."}                fragment de texte
+      {"type":"fin", ...corps habituel...}          succès (contenu/exercices, tronque, message)
+      {"type":"erreur","detail":"...","status":N}   échec en cours de route (le statut HTTP est déjà 200)
+    Des octets partent dès l'ouverture puis régulièrement (commentaires ": ..."
+    inclus) : le routeur Heroku ne déclenche donc plus de H12."""
+
+    def flux():
+        yield ": ouverture\n\n"  # premier octet immédiat (limite Heroku : 30 s)
+        dernier = time.monotonic()
+        try:
+            for type_evenement, valeur in evenements:
+                if type_evenement == "delta":
+                    if valeur:
+                        yield _sse({"type": "delta", "texte": valeur})
+                        dernier = time.monotonic()
+                    elif time.monotonic() - dernier >= 10:
+                        yield ": battement\n\n"
+                        dernier = time.monotonic()
+                else:
+                    yield _sse({"type": "fin", **_corps_generation(valeur)})
+        except IAErreur as exc:
+            yield _sse({"type": "erreur", "detail": str(exc), "status": _statut_pour_erreur(exc)})
+        except Exception:  # noqa: BLE001 : le contenu de l'erreur n'est jamais renvoyé tel quel
+            logger.exception("Erreur inattendue pendant la génération IA en flux")
+            yield _sse({"type": "erreur", "detail": "Erreur inattendue pendant la génération.", "status": 500})
+        finally:
+            evenements.close()  # client parti ou fin : solde le budget via le générateur sous-jacent
+
+    reponse = StreamingHttpResponse(flux(), content_type="text/event-stream; charset=utf-8")
+    reponse["Cache-Control"] = "no-cache"
+    reponse["X-Accel-Buffering"] = "no"
+    return reponse
 
 
 class VerifierContenuView(APIView):

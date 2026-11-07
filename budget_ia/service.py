@@ -265,7 +265,7 @@ def ouvrir(*, fonctionnalite: str, modele: str, tokens_entree: int, tokens_sorti
         budget = _verrouiller_budget(mois)
         _abandonner_perimees(budget)
         plafond = Decimal(settings.BUDGET_IA_SEUIL_OPERATIONNEL_FCFA)
-        if budget.depense_fcfa + budget.reserve_fcfa + cout_max > plafond:
+        if settings.BUDGET_IA_PLAFOND_ACTIF and budget.depense_fcfa + budget.reserve_fcfa + cout_max > plafond:
             plein = True
             budget.save()
         else:
@@ -277,6 +277,7 @@ def ouvrir(*, fonctionnalite: str, modele: str, tokens_entree: int, tokens_sorti
                 cle_requete=(ctx.cle_requete if ctx else ""), cout_reserve_fcfa=cout_max,
                 tache_id=(_tache.get()[0] if _tache.get() else None),
             )
+            # Plafond désactivé : le suivi et les alertes d'information continuent, mais plus aucun refus.
             part = (budget.depense_fcfa + budget.reserve_fcfa) * 100 / plafond if plafond > 0 else Decimal(100)
     if plein:
         _alerter(mois, 100)  # hors de la transaction : le refus n'efface pas l'alerte

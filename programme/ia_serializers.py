@@ -17,3 +17,5 @@ class VerifierContenuSerializer(serializers.Serializer):
     section = serializers.ChoiceField(choices=SECTIONS_CHOICES)
     contenu = serializers.CharField(trim_whitespace=False, allow_blank=False)
     notion_id = serializers.IntegerField(required=False, allow_null=True)
+    # Opt-in : True -> avis lu en flux SSE (contenu long, évite le H12 Heroku). Absent/False -> JSON d'un bloc.
+    stream = serializers.BooleanField(required=False, default=False)

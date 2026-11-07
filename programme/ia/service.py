@@ -159,10 +159,8 @@ pas une nouvelle version.
 """
 
 
-def verifier_contenu(section: str, contenu: str, notion: Notion | None = None) -> str:
-    """Demande à l'IA un second regard sur un contenu déjà rédigé (cours,
-    démonstrations ou exercices). Renvoie un AVIS texte — jamais une
-    validation formelle, voir le system prompt ci-dessus."""
+def _prompts_verification(section: str, contenu: str, notion: Notion | None) -> tuple[str, str]:
+    """(system_prompt, user_prompt) de la vérification — commun au chemin bloc et au chemin flux."""
 
     spec = SECTIONS.get(section)
     if spec is None:
@@ -180,5 +178,30 @@ def verifier_contenu(section: str, contenu: str, notion: Notion | None = None) -
         parties.append(construire_contexte_notion(notion))
     parties.append(f"CONTENU À RELIRE (section « {spec.libelle} ») :\n---\n{contenu}\n---")
 
-    reponse = appeler_ia(system_prompt, "\n\n".join(parties))
+    return system_prompt, "\n\n".join(parties)
+
+
+def verifier_contenu(section: str, contenu: str, notion: Notion | None = None) -> str:
+    """Demande à l'IA un second regard sur un contenu déjà rédigé (cours,
+    démonstrations ou exercices). Renvoie un AVIS texte — jamais une
+    validation formelle, voir le system prompt ci-dessus."""
+
+    system_prompt, user_prompt = _prompts_verification(section, contenu, notion)
+    reponse = appeler_ia(system_prompt, user_prompt)
     return reponse.texte
+
+
+def verifier_contenu_flux(section: str, contenu: str, notion: Notion | None = None):
+    """Version STREAMING de verifier_contenu (contre le H12 Heroku). Mêmes contrôles
+    immédiats (section inconnue, clé, budget) que verifier_contenu : ils lèvent ICI.
+    Générateur d'événements : ("delta", texte) puis ("fin", avis: str)."""
+
+    system_prompt, user_prompt = _prompts_verification(section, contenu, notion)
+    flux = preparer_flux_ia(system_prompt, user_prompt)
+
+    def evenements():
+        for delta in flux.deltas():
+            yield ("delta", delta)
+        yield ("fin", flux.reponse.texte)
+
+    return evenements()

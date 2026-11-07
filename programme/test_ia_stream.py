@@ -165,6 +165,69 @@ class GenerationFluxTests(TestCase):
         r = self.post_accept("application/json", client)
         self.assertEqual((r.status_code, r.json()), (200, {"tronque": False, "contenu": "ok"}))
 
+    def test_cours_en_flux_donne_deltas_puis_fin_identique_au_json(self):
+        flux = _FauxFlux([_evt_texte("## Cours "), _evt_texte("PGCD")], "## Cours PGCD")
+        r = self.post_accept("text/event-stream, application/json;q=0.9", faux_client_flux(flux), stream=True, section="cours")
+        self.assertEqual(r.status_code, 200)
+        _, evenements = lire_sse(r)
+        self.assertEqual([e["type"] for e in evenements], ["delta", "delta", "fin"])
+        self.assertEqual(evenements[-1], {"type": "fin", "tronque": False, "contenu": "## Cours PGCD"})
+
+    def test_toutes_les_sections_texte_se_generent_en_flux(self):
+        from .ia.prompts import SECTIONS
+
+        for cle in [c for c in SECTIONS if c != "exercices"]:
+            with self.subTest(section=cle):
+                flux = _FauxFlux([_evt_texte("texte " + cle)], "texte " + cle)
+                r = self.post(faux_client_flux(flux), stream=True, section=cle)
+                self.assertEqual(r.status_code, 200)
+                self.assertTrue(r["Content-Type"].startswith("text/event-stream"))
+                _, evenements = lire_sse(r)
+                self.assertEqual(evenements[-1], {"type": "fin", "tronque": False, "contenu": "texte " + cle})
+
+    def post_verifier(self, client, accept="text/event-stream, application/json;q=0.9", **extra):
+        corps = {"section": "cours", "contenu": "Le PGCD de 12 et 18 est 6.", "notion_id": self.notion.id, **extra}
+        with mock.patch("anthropic.Anthropic", return_value=client), override_settings(IA_NOTION_MODELE_ID=self.notion.id):
+            return self.api.post("/api/admin/ia/verifier/", corps, format="json", HTTP_ACCEPT=accept)
+
+    def test_verifier_en_flux_deltas_puis_fin_avec_avis(self):
+        flux = _FauxFlux([_evt_texte("Avis : "), _evt_texte("correct")], "Avis : correct")
+        r = self.post_verifier(faux_client_flux(flux), stream=True)   # Accept réel du front : 200, pas 406
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r["Content-Type"].startswith("text/event-stream"))
+        _, evenements = lire_sse(r)
+        self.assertEqual([e["type"] for e in evenements], ["delta", "delta", "fin"])
+        self.assertEqual(evenements[-1], {"type": "fin", "avis": "Avis : correct"})
+        op = OperationIA.objects.get()
+        self.assertEqual(op.statut, "terminee")
+        self.assertEqual(BudgetMensuel.objects.get().reserve_fcfa, Decimal(0))
+
+    def test_verifier_sans_stream_json_inchange(self):
+        client = faux_client_flux(None)
+        client.messages.create.return_value = SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="Avis : correct")], stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=100, output_tokens=50),
+        )
+        r = self.post_verifier(client, accept="application/json")
+        self.assertEqual((r.status_code, r.json()), (200, {"avis": "Avis : correct"}))
+        client.messages.stream.assert_not_called()
+
+    def test_verifier_refus_avant_flux_reste_json(self):
+        r = self.post_verifier(faux_client_flux(_FauxFlux([], "")), stream=True, section="histoire")   # non vérifiable
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue(r["Content-Type"].startswith("application/json"))
+        with override_settings(ANTHROPIC_API_KEY=""):
+            r = self.post_verifier(faux_client_flux(_FauxFlux([], "")), stream=True)
+        self.assertEqual(r.status_code, 500)
+
+    def test_verifier_erreur_en_cours_de_flux_donne_un_evenement_erreur(self):
+        import anthropic
+
+        flux = _FauxFlux([_evt_texte("abc")], "abc", erreur=anthropic.APIConnectionError(request=mock.Mock()))
+        _, evenements = lire_sse(self.post_verifier(faux_client_flux(flux), stream=True))
+        self.assertEqual(evenements[-1]["type"], "erreur")
+        self.assertEqual(evenements[-1]["status"], 502)
+
     def test_reponse_streamee_porte_les_memes_en_tetes_cors_que_le_json(self):
         origine = "http://localhost:3000"  # dans CORS_ALLOWED_ORIGINS : pas d'élargissement de la config
         corps = {"notion_id": self.notion.id, "section": "sujet_examen", "stream": True}

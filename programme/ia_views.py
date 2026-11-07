@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 from comptes.permissions import IsAdminRole
 
 from .ia.exceptions import IAConfigurationInvalide, IAErreur, RefusBudget, SectionInconnue
-from .ia.service import generer_section, generer_section_flux, verifier_contenu
+from .ia.service import generer_section, generer_section_flux, verifier_contenu, verifier_contenu_flux
 from .ia_serializers import GenererSectionSerializer, VerifierContenuSerializer
 from .models import Notion, PromptSectionNotion
 
@@ -134,13 +134,16 @@ def _sse(donnees: dict) -> str:
     return "data: " + json.dumps(donnees, ensure_ascii=False) + "\n\n"
 
 
-def _reponse_sse(evenements) -> StreamingHttpResponse:
+def _reponse_sse(evenements, corps_fin=None) -> StreamingHttpResponse:
     """Flux Server-Sent Events. Évènements JSON, un par message `data:` :
       {"type":"delta","texte":"..."}                fragment de texte
       {"type":"fin", ...corps habituel...}          succès (contenu/exercices, tronque, message)
       {"type":"erreur","detail":"...","status":N}   échec en cours de route (le statut HTTP est déjà 200)
     Des octets partent dès l'ouverture puis régulièrement (commentaires ": ..."
-    inclus) : le routeur Heroku ne déclenche donc plus de H12."""
+    inclus) : le routeur Heroku ne déclenche donc plus de H12.
+    `corps_fin` met en forme la valeur de l'événement final (défaut : corps d'une génération ;
+    la vérification passe `lambda avis: {"avis": avis}`)."""
+    corps_fin = corps_fin or _corps_generation
 
     def flux():
         yield ": ouverture\n\n"  # premier octet immédiat (limite Heroku : 30 s)
@@ -155,7 +158,7 @@ def _reponse_sse(evenements) -> StreamingHttpResponse:
                         yield ": battement\n\n"
                         dernier = time.monotonic()
                 else:
-                    yield _sse({"type": "fin", **_corps_generation(valeur)})
+                    yield _sse({"type": "fin", **corps_fin(valeur)})
         except IAErreur as exc:
             yield _sse({"type": "erreur", "detail": str(exc), "status": _statut_pour_erreur(exc)})
         except Exception:  # noqa: BLE001 : le contenu de l'erreur n'est jamais renvoyé tel quel
@@ -178,6 +181,7 @@ class VerifierContenuView(APIView):
     """
 
     permission_classes = [IsAdminRole]
+    content_negotiation_class = NegociationFlux  # accepte `Accept: text/event-stream` (sinon 406 avant la vue)
 
     def post(self, request):
         serializer = VerifierContenuSerializer(data=request.data)
@@ -191,6 +195,15 @@ class VerifierContenuView(APIView):
             notion, erreur = _recuperer_notion(notion_id)
             if erreur is not None:
                 return erreur
+
+        if serializer.validated_data["stream"]:
+            try:
+                evenements = verifier_contenu_flux(section, contenu, notion=notion)
+            except SectionInconnue as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            except IAErreur as exc:  # refus avant tout flux (clé, budget...) : vraie erreur HTTP JSON
+                return Response({"detail": str(exc)}, status=_statut_pour_erreur(exc))
+            return _reponse_sse(evenements, corps_fin=lambda avis: {"avis": avis})
 
         try:
             avis = verifier_contenu(section, contenu, notion=notion)

@@ -11,6 +11,8 @@ import time
 
 from django.http import StreamingHttpResponse
 from rest_framework import status
+from rest_framework.exceptions import NotAcceptable
+from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -51,11 +53,29 @@ def _statut_pour_erreur(exc: IAErreur) -> int:
     return status.HTTP_502_BAD_GATEWAY
 
 
+class NegociationFlux(DefaultContentNegotiation):
+    """Négociation propre à GenererSectionView (les autres endpoints gardent celle de DRF).
+
+    Le front du flux demande `Accept: text/event-stream`, qu'aucun renderer DRF ne couvre : sans cela DRF
+    répond 406 avant même d'exécuter la vue. On l'accepte ici et on retient le premier renderer de la vue (JSON) :
+    il sert aux refus avant flux (budget, clé...). Le flux lui-même est un StreamingHttpResponse qui ne passe
+    jamais par un renderer. Un autre type inconnu reste un 406."""
+
+    def select_renderer(self, request, renderers, format_suffix=None):
+        try:
+            return super().select_renderer(request, renderers, format_suffix)
+        except NotAcceptable:
+            if "text/event-stream" in request.META.get("HTTP_ACCEPT", "").lower() and renderers:
+                return renderers[0], renderers[0].media_type
+            raise
+
+
 class GenererSectionView(APIView):
     """POST /api/admin/ia/generer/  { notion_id, section }
     -> { contenu } (Markdown) pour les sections texte, { exercices: [...] } pour "exercices"."""
 
     permission_classes = [IsAdminRole]
+    content_negotiation_class = NegociationFlux
 
     def post(self, request):
         serializer = GenererSectionSerializer(data=request.data)

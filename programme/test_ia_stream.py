@@ -128,6 +128,43 @@ class GenerationFluxTests(TestCase):
         self.assertEqual("".join(e["texte"] for e in evenements if e["type"] == "delta"), "Durée : 1 heure")
         self.assertEqual(evenements[-1], {"type": "fin", "tronque": False, "contenu": "Durée : 1 heure"})
 
+    def post_accept(self, accept, client, **corps_extra):
+        corps = {"notion_id": self.notion.id, "section": "sujet_examen", **corps_extra}
+        with mock.patch("anthropic.Anthropic", return_value=client), override_settings(IA_NOTION_MODELE_ID=self.notion.id):
+            return self.api.post("/api/admin/ia/generer/", corps, format="json", HTTP_ACCEPT=accept)
+
+    def test_accept_event_stream_donne_200_et_flux_pas_406(self):
+        flux = _FauxFlux([_evt_texte("abc")], "abc")
+        r = self.post_accept("text/event-stream", faux_client_flux(flux), stream=True)   # l'en-tête réel du front
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r["Content-Type"].startswith("text/event-stream"))
+        _, evenements = lire_sse(r)
+        self.assertEqual([e["type"] for e in evenements], ["delta", "fin"])
+
+    def test_accept_du_front_avec_repli_json_donne_200_et_flux(self):
+        flux = _FauxFlux([_evt_texte("abc")], "abc")
+        r = self.post_accept("text/event-stream, application/json;q=0.9", faux_client_flux(flux), stream=True)
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r["Content-Type"].startswith("text/event-stream"))
+
+    def test_refus_avant_flux_reste_json_lisible_avec_accept_event_stream(self):
+        BudgetMensuel.objects.create(mois=budget.mois_et_jour()[0], depense_fcfa=Decimal("90000"))
+        with override_settings(BUDGET_IA_PLAFOND_ACTIF=True):
+            r = self.post_accept("text/event-stream, application/json;q=0.9", faux_client_flux(None), stream=True)
+        self.assertEqual(r.status_code, 503)
+        self.assertTrue(r["Content-Type"].startswith("application/json"))
+
+    def test_type_inconnu_reste_406_et_json_inchange(self):
+        r = self.post_accept("application/xml", faux_client_flux(None))
+        self.assertEqual(r.status_code, 406)
+        client = faux_client_flux(None)
+        client.messages.create.return_value = SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="ok")], stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+        )
+        r = self.post_accept("application/json", client)
+        self.assertEqual((r.status_code, r.json()), (200, {"tronque": False, "contenu": "ok"}))
+
     def test_reponse_streamee_porte_les_memes_en_tetes_cors_que_le_json(self):
         origine = "http://localhost:3000"  # dans CORS_ALLOWED_ORIGINS : pas d'élargissement de la config
         corps = {"notion_id": self.notion.id, "section": "sujet_examen", "stream": True}

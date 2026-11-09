@@ -1,0 +1,272 @@
+[
+  {
+    "terme": "structure de la matière",
+    "definition": "Organisation de la matière à l'échelle des atomes, des molécules et des ions.",
+    "exemple": "L'eau est composée de molécules H₂O ; le sel solide contient des ions Na⁺ et Cl⁻."
+  },
+  {
+    "terme": "ions",
+    "definition": "Atomes ou groupes d'atomes qui portent une charge électrique positive ou négative.",
+    "exemple": "Na⁺ est positif ; Cl⁻ est négatif."
+  },
+  {
+    "terme": "molécule d'eau",
+    "definition": "Ensemble de deux atomes d'hydrogène et d'un atome d'oxygène, liés entre eux.",
+    "exemple": "La formule d'une molécule d'eau est $H_2O$."
+  },
+  {
+    "terme": "dissolution",
+    "definition": "Phénomène dans lequel un soluté se répartit dans un solvant et forme une solution homogène.",
+    "exemple": "Le sel se dissout dans l'eau : ses ions se dispersent sans disparaître."
+  },
+  {
+    "terme": "atomes",
+    "definition": "Plus petites unités d'un élément chimique qui en conservent l'identité chimique.",
+    "exemple": "L'oxygène et l'hydrogène sont les deux éléments présents dans l'eau."
+  },
+  {
+    "terme": "molécules",
+    "definition": "Ensembles d'atomes liés chimiquement et formant des entités électriquement neutres.",
+    "exemple": "Une molécule d'eau contient deux atomes d'hydrogène et un d'oxygène."
+  },
+  {
+    "terme": "conductivité électrique",
+    "definition": "Capacité d'un matériau ou d'une solution à laisser passer un courant électrique.",
+    "exemple": "Une solution de sel conduit mieux le courant que l'eau extrêmement pure."
+  },
+  {
+    "terme": "charge électrique",
+    "definition": "Propriété d'une particule pouvant être positive ou négative ; elle explique certaines attractions et répulsions.",
+    "exemple": "L'ion sodium $Na^+$ est chargé positivement."
+  },
+  {
+    "terme": "solutions aqueuses",
+    "definition": "Mélanges homogènes dont le solvant est l'eau.",
+    "exemple": "L'eau salée est une solution aqueuse."
+  },
+  {
+    "terme": "chlorure de sodium",
+    "definition": "Composé ionique courant, appelé sel de cuisine, constitué d'ions sodium et chlorure.",
+    "exemple": "$NaCl(s)\\rightarrow Na^+(aq)+Cl^-(aq)$."
+  },
+  {
+    "terme": "ions sodium",
+    "definition": "Ions de sodium portant une charge électrique positive, de formule $Na^+$.",
+    "exemple": "Lors de la dissolution de NaCl, des ions $Na^+$ se dispersent dans l'eau."
+  },
+  {
+    "terme": "ions chlorure",
+    "definition": "Ions de chlorure portant une charge électrique négative, de formule $Cl^-$.",
+    "exemple": "Une solution de NaCl contient des ions $Cl^-$."
+  },
+  {
+    "terme": "réseau cristallin",
+    "definition": "Disposition régulière et répétitive des particules qui constituent un cristal.",
+    "exemple": "Dans un cristal de NaCl, les ions sont ordonnés dans un réseau."
+  },
+  {
+    "terme": "dissociation électrolytique",
+    "definition": "Séparation d'une substance en ions mobiles lorsqu'elle se dissout ou se trouve dans un milieu approprié.",
+    "exemple": "$NaCl(s)\\rightarrow Na^+(aq)+Cl^-(aq)$."
+  },
+  {
+    "terme": "électrons",
+    "definition": "Particules de charge électrique négative présentes autour du noyau des atomes.",
+    "exemple": "L'atome d'oxygène attire les électrons de ses liaisons avec l'hydrogène."
+  },
+  {
+    "terme": "liaisons chimiques",
+    "definition": "Interactions qui maintiennent les atomes ensemble dans des molécules ou des solides.",
+    "exemple": "Deux liaisons O–H relient l'oxygène aux hydrogènes dans l'eau."
+  },
+  {
+    "terme": "charge partielle",
+    "definition": "Petite différence de charge dans une liaison polarisée ; elle ne correspond pas à une charge ionique entière.",
+    "exemple": "L'oxygène de l'eau porte $\\delta^-$ et les hydrogènes portent $\\delta^+$."
+  },
+  {
+    "terme": "polaire",
+    "definition": "Se dit d'une molécule où les charges partielles positives et négatives ne se compensent pas dans leur répartition spatiale.",
+    "exemple": "La molécule d'eau est polaire à cause de ses liaisons et de sa forme coudée."
+  },
+  {
+    "terme": "polarité",
+    "definition": "Propriété d'une molécule dont les charges électriques sont réparties de manière dissymétrique.",
+    "exemple": "La polarité de l'eau contribue à son interaction avec $Na^+$ et $Cl^-$."
+  },
+  {
+    "terme": "solvant",
+    "definition": "Constituant d'une solution qui dissout le soluté.",
+    "exemple": "Dans l'eau salée, l'eau est le solvant."
+  },
+  {
+    "terme": "interactions électrostatiques",
+    "definition": "Forces d'attraction ou de répulsion entre particules chargées ou régions portant des charges partielles.",
+    "exemple": "Le côté oxygène de l'eau attire les ions $Na^+$."
+  },
+  {
+    "terme": "hydratation des ions",
+    "definition": "Entourage et stabilisation des ions dissous par des molécules d'eau.",
+    "exemple": "Autour de $Na^+$, les molécules d'eau présentent préférentiellement leur oxygène."
+  },
+  {
+    "terme": "soluté",
+    "definition": "Substance dissoute dans un solvant pour former une solution.",
+    "exemple": "Dans une solution d'eau salée, le sel est le soluté."
+  },
+  {
+    "terme": "solvant polaire",
+    "definition": "Solvant constitué de molécules polaires, qui peuvent interagir avec des ions et d'autres molécules polaires.",
+    "exemple": "L'eau est un solvant polaire."
+  },
+  {
+    "terme": "composés ioniques",
+    "definition": "Substances constituées d'ions positifs et négatifs associés par des attractions électriques.",
+    "exemple": "Le chlorure de sodium NaCl est un composé ionique."
+  },
+  {
+    "terme": "composés moléculaires",
+    "definition": "Substances constituées de molécules, plutôt que d'un réseau d'ions.",
+    "exemple": "Le saccharose (sucre) est un composé moléculaire."
+  },
+  {
+    "terme": "proton",
+    "definition": "Particule de charge positive présente dans le noyau ; en chimie acide-base, $H^+$ désigne le proton transféré.",
+    "exemple": "Dans l'autoprotolyse, une molécule d'eau transfère un proton à une autre."
+  },
+  {
+    "terme": "ion oxonium",
+    "definition": "Ion positif de formule $H_3O^+$ formé lorsqu'une molécule d'eau reçoit un proton.",
+    "exemple": "$H_2O+H^+\\rightarrow H_3O^+$."
+  },
+  {
+    "terme": "ion hydroxyde",
+    "definition": "Ion négatif de formule $OH^-$ composé d'oxygène et d'hydrogène.",
+    "exemple": "L'autoprotolyse produit aussi des ions $OH^-$."
+  },
+  {
+    "terme": "autoprotolyse de l'eau",
+    "definition": "Réaction réversible au cours de laquelle une molécule d'eau cède un proton à une autre.",
+    "exemple": "$2H_2O\\rightleftharpoons H_3O^++OH^-$."
+  },
+  {
+    "terme": "transfert de proton",
+    "definition": "Passage d'un proton $H^+$ d'une espèce chimique à une autre.",
+    "exemple": "Pendant l'autoprotolyse, une molécule d'eau donne $H^+$ à une autre."
+  },
+  {
+    "terme": "réactions chimiques",
+    "definition": "Transformations dans lesquelles des espèces chimiques réagissent pour en former d'autres.",
+    "exemple": "$HCl+H_2O\\rightarrow H_3O^++Cl^-$."
+  },
+  {
+    "terme": "équilibre chimique",
+    "definition": "État d'une réaction réversible où les transformations directe et inverse se produisent à la même vitesse.",
+    "exemple": "Dans l'eau, des ions se forment et se recombinent continuellement à l'équilibre."
+  },
+  {
+    "terme": "solutions aqueuses diluées",
+    "definition": "Solutions contenant relativement peu de soluté, dans lesquelles certaines approximations de concentration sont adaptées.",
+    "exemple": "Une solution de HCl à $10^{-3}\\ \\mathrm{mol/L}$ est souvent traitée par le modèle scolaire dilué."
+  },
+  {
+    "terme": "concentrations molaires",
+    "definition": "Quantités de matière d'une espèce chimique par volume de solution ; elles s'expriment souvent en mol/L.",
+    "exemple": "$10^{-3}\\ \\mathrm{mol/L}$ correspond à $0{,}001$ mole par litre."
+  },
+  {
+    "terme": "produit ionique de l'eau",
+    "definition": "Grandeur d'équilibre liée aux ions oxonium et hydroxyde, dépendant de la température.",
+    "exemple": "À $25\\,^{\\circ}\\mathrm C$, on prend $K_e\\approx10^{-14}$ dans le modèle scolaire."
+  },
+  {
+    "terme": "neutralité d'une solution aqueuse",
+    "definition": "État où les activités des ions oxonium et hydroxyde sont égales ; leurs concentrations sont approximativement égales en solution diluée.",
+    "exemple": "L'eau pure à $25\\,^{\\circ}\\mathrm C$ a un pH voisin de 7."
+  },
+  {
+    "terme": "écritures scientifiques",
+    "definition": "Manière d'écrire un nombre comme le produit d'un nombre compris entre 1 et 10 et d'une puissance de 10.",
+    "exemple": "$0{,}001=1\\times10^{-3}$."
+  },
+  {
+    "terme": "acidité",
+    "definition": "Caractère d'une solution déterminé par l'activité des ions hydrogène ; à 25 °C, une solution acide a généralement un pH inférieur à 7.",
+    "exemple": "Une solution de pH 3 à 25 °C est acide."
+  },
+  {
+    "terme": "pH",
+    "definition": "Grandeur sans unité qui décrit l'acidité ou la basicité d'une solution à partir de l'activité des ions hydrogène.",
+    "exemple": "Dans le modèle dilué, si $[H_3O^+]=10^{-3}\\ \\mathrm{mol/L}$, alors $pH\\approx3$."
+  },
+  {
+    "terme": "échelle logarithmique",
+    "definition": "Échelle où une même différence de valeur représente un même facteur multiplicatif.",
+    "exemple": "Une différence d'une unité de pH correspond à un facteur 10 sur l'activité des ions hydrogène."
+  },
+  {
+    "terme": "concentration de référence",
+    "definition": "Concentration choisie pour former un rapport sans unité dans une formule.",
+    "exemple": "Pour l'approximation scolaire du pH, $c^\\circ=1\\ \\mathrm{mol/L}$."
+  },
+  {
+    "terme": "logarithme décimal",
+    "definition": "Opération qui donne l'exposant auquel il faut élever 10 pour obtenir un nombre positif.",
+    "exemple": "$\\log(100)=2$, car $10^2=100$."
+  },
+  {
+    "terme": "solutions acides",
+    "definition": "Solutions dont l'activité des ions hydrogène est supérieure à la valeur correspondant à la neutralité.",
+    "exemple": "À 25 °C, une solution de pH 3 est acide."
+  },
+  {
+    "terme": "solutions neutres",
+    "definition": "Solutions où les activités des ions oxonium et hydroxyde sont égales.",
+    "exemple": "L'eau pure à 25 °C est neutre, avec un pH voisin de 7."
+  },
+  {
+    "terme": "solutions basiques",
+    "definition": "Solutions où l'activité des ions hydroxyde est supérieure à celle des ions oxonium.",
+    "exemple": "À 25 °C, une solution de pH 11 est basique."
+  },
+  {
+    "terme": "activité des ions hydrogène",
+    "definition": "Grandeur thermodynamique sans unité décrivant le comportement effectif des ions hydrogène hydratés en solution.",
+    "exemple": "Le pH est défini rigoureusement à partir de cette activité."
+  },
+  {
+    "terme": "approximation",
+    "definition": "Simplification utilisée pour calculer ou décrire un phénomène dans des conditions précises.",
+    "exemple": "En solution suffisamment diluée, on approche souvent l'activité par la concentration relative à $1\\ \\mathrm{mol/L}$."
+  },
+  {
+    "terme": "potable",
+    "definition": "Se dit d'une eau qui peut être consommée sans risque sanitaire inacceptable selon les critères applicables.",
+    "exemple": "Une eau de pH 7 n'est pas forcément potable : d'autres analyses sont nécessaires."
+  },
+  {
+    "terme": "fermentation",
+    "definition": "Transformation de substances organiques sous l'action d'enzymes, souvent produites par des microorganismes.",
+    "exemple": "Les levures transforment des sucres durant la fermentation."
+  },
+  {
+    "terme": "indicateurs colorés",
+    "definition": "Substances dont la couleur varie selon le pH de la solution.",
+    "exemple": "Le bleu de bromothymol change de couleur selon le pH."
+  },
+  {
+    "terme": "papier pH",
+    "definition": "Papier contenant des indicateurs colorés pour estimer le pH d'une solution.",
+    "exemple": "On compare sa couleur à une échelle de référence."
+  },
+  {
+    "terme": "pH-mètres",
+    "definition": "Appareils de mesure du pH utilisant une électrode et un étalonnage approprié.",
+    "exemple": "Le pH-mètre permet de mesurer le pH d'une solution."
+  },
+  {
+    "terme": "ionisation",
+    "definition": "Formation d'ions à partir d'espèces initialement neutres, notamment lors d'une réaction avec l'eau.",
+    "exemple": "$HCl+H_2O\\rightarrow H_3O^++Cl^-$."
+  }
+]
